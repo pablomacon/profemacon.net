@@ -3,6 +3,10 @@
   "name": "profemacon-net-2",
   "compatibility_date": "2026-07-20",
   "main": "worker/index.ts",
+  "assets": {
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
   "d1_databases": [
     {
       "binding": "DB",
