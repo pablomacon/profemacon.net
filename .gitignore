@@ -1,0 +1,23 @@
+# Dependencias y salidas de compilación
+node_modules/
+dist/
+.vite/
+coverage/
+*.tsbuildinfo
+
+# Estado local de Wrangler y D1
+.wrangler/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
+# Secretos y configuración local
+.env
+.env.*
+!.env.example
+
+# Archivos temporales y del sistema
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
