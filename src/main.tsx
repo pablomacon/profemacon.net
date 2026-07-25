@@ -1,8 +1,9 @@
 import { StrictMode, useEffect, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
+import { Unit0, Unit0Activity } from "./unit0";
 import "./styles.css";
 
-type Route = "/" | "/ingresar" | "/mis-cursos" | "/historial" | "/docente" | "/practicante";
+type Route = "/" | "/ingresar" | "/mis-cursos" | "/historial" | "/docente" | "/practicante" | "/curso/programacion-i/unidad-0" | "/curso/programacion-i/unidad-0/actividad";
 type Theme = "dark" | "light";
 
 const navigation: { label: string; path: Route; icon: string }[] = [
@@ -12,6 +13,8 @@ const navigation: { label: string; path: Route; icon: string }[] = [
   { label: "Docente", path: "/docente", icon: "□" },
   { label: "Practicante", path: "/practicante", icon: "◇" },
 ];
+
+const supportedRoutes: Route[] = ["/", "/ingresar", "/mis-cursos", "/historial", "/docente", "/practicante", "/curso/programacion-i/unidad-0", "/curso/programacion-i/unidad-0/actividad"];
 
 const navigate = (path: Route) => {
   window.history.pushState({}, "", path);
@@ -115,15 +118,21 @@ function Placeholder({ title, section, detail }: { title: string; section: strin
   );
 }
 
+function Courses() {
+  return <section className="courses-view"><p className="eyebrow">Programación I</p><h1>Mis cursos</h1><article className="course-card"><div><span>Unidad 0</span><h2>Introducción a la programación</h2><p>Informática, computadora, lenguajes de programación, Java y JVM.</p></div><button className="button-primary" onClick={() => navigate("/curso/programacion-i/unidad-0")}>Abrir unidad</button></article></section>;
+}
+
 function App() {
-  const [route, setRoute] = useState<Route>(() => (navigation.some((item) => item.path === window.location.pathname) || window.location.pathname === "/ingresar" ? window.location.pathname as Route : "/"));
+  const [route, setRoute] = useState<Route>(() => supportedRoutes.includes(window.location.pathname as Route) ? window.location.pathname as Route : "/");
   const [theme, setTheme] = useState<Theme>(() => localStorage.getItem("profemacon-theme") === "light" ? "light" : "dark");
   useEffect(() => { const listener = () => setRoute(window.location.pathname as Route); window.addEventListener("popstate", listener); return () => window.removeEventListener("popstate", listener); }, []);
   useEffect(() => { localStorage.setItem("profemacon-theme", theme); }, [theme]);
 
   const view = route === "/" ? <Home />
     : route === "/ingresar" ? <Placeholder section="Acceso" title="Ingresar" detail="La autenticación se incorporará en una etapa posterior, con sesiones y permisos definidos." />
-    : route === "/mis-cursos" ? <Placeholder section="Cursos" title="Mis cursos" detail="Aquí se mostrarán los grupos y materiales correspondientes a cada usuario." />
+    : route === "/mis-cursos" ? <Courses />
+    : route === "/curso/programacion-i/unidad-0" ? <Unit0 onBack={() => navigate("/mis-cursos")} onStartActivity={() => navigate("/curso/programacion-i/unidad-0/actividad")} theme={theme} />
+    : route === "/curso/programacion-i/unidad-0/actividad" ? <Unit0Activity onBack={() => navigate("/curso/programacion-i/unidad-0")} />
     : route === "/historial" ? <Placeholder section="Archivo" title="Historial" detail="Los cursos archivados, resultados y materiales de solo lectura aparecerán en esta vista." />
     : route === "/docente" ? <Placeholder section="Administración" title="Panel docente" detail="La gestión de grupos, inscripciones y resultados se integrará sobre la base D1 local." />
     : <Placeholder section="Acompañamiento" title="Panel de practicante" detail="Esta vista se limitará a los grupos asignados explícitamente." />;
