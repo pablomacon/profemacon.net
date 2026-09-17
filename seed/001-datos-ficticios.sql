@@ -10,6 +10,12 @@ INSERT OR IGNORE INTO usuarios (nombre_usuario, nombre_mostrado, correo) VALUES
   ('ana.docente', 'Ana Docente (prueba)', 'ana.docente@example.test'),
   ('estudiante.demo', 'Estudiante Demo (prueba)', 'estudiante.demo@example.test');
 
+UPDATE usuarios SET nombres = 'Ana', apellidos = 'Docente'
+WHERE nombre_usuario = 'ana.docente' AND nombres IS NULL AND apellidos IS NULL;
+
+UPDATE usuarios SET nombres = 'Estudiante', apellidos = 'Demo'
+WHERE nombre_usuario = 'estudiante.demo' AND nombres IS NULL AND apellidos IS NULL;
+
 INSERT OR IGNORE INTO usuario_roles (usuario_id, rol_id)
 SELECT u.id, r.id
 FROM usuarios u

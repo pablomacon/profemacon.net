@@ -93,7 +93,7 @@ La convención de nombres de usuario todavía debe cerrarse. La orientación aco
 
 Un estudiante extranjero puede inscribirse con pasaporte y obtener posteriormente una cédula uruguaya. Esto no debe crear una segunda cuenta.
 
-La migración `0004_autenticacion_local.sql` permite guardar múltiples documentos históricos vinculados al mismo usuario. El procedimiento previsto es:
+La migración `0004_autenticacion_local.sql` permite guardar múltiples documentos históricos vinculados al mismo usuario. La migración `0005_importacion_estudiantes.sql` agrega nombres y apellidos estructurados y la trazabilidad de lotes, sin almacenar el archivo ni documentos en claro. El procedimiento previsto es:
 
 1. localizar y confirmar manualmente la cuenta existente;
 2. agregar el nuevo documento;
@@ -235,7 +235,7 @@ Falta implementar el circuito transaccional:
 
 ## 8. Estado de la D1 local
 
-Las migraciones `0001` a `0004` están aplicadas. Después de las pruebas y su limpieza, el estado relevante es:
+Las migraciones `0001` a `0005` están aplicadas. Después de las pruebas y su limpieza, el estado relevante es:
 
 | Entidad | Cantidad o estado |
 | --- | ---: |
@@ -316,6 +316,7 @@ No se deben introducir datos personales reales en semillas, fixtures, Markdown, 
 - No hay panel docente ni de practicante funcional.
 - No hay pruebas automatizadas ni script de lint.
 - Mermaid genera fragmentos grandes durante el build; es una advertencia de rendimiento, no un error funcional.
+- `npm audit` informa 11 avisos en la cadena preexistente de herramientas de Cloudflare y Mermaid (7 altos y 4 moderados al 17 de septiembre de 2026). Las dependencias nuevas del lector XLSX no aparecen afectadas. Se debe actualizar y volver a probar esa cadena antes de un despliegue real.
 - Wrangler intenta escribir registros bajo el perfil del usuario y puede mostrar advertencias de permisos dentro del entorno restringido. Las operaciones locales se completan igualmente.
 - La tabla de identidades Google de `0003` quedó como estructura no utilizada y deberá evaluarse antes de consolidar el esquema definitivo.
 
@@ -333,8 +334,11 @@ El orden recomendado es el siguiente.
 
 ### Hito 2 — Importación controlada de estudiantes
 
-- Definir formalmente la convención de nombres de usuario.
-- Importar nombre, apellido, grupo y documento desde una lista controlada.
+- Completado: reconocer el formato de portafolio y el grupo desde el nombre del archivo.
+- Completado: separar nombre y apellido e ignorar nacimiento y carné de salud.
+- Completado: previsualizar y validar sin mostrar datos personales.
+- Pendiente: definir formalmente el sufijo definitivo del nombre de usuario.
+- Pendiente: aplicar nombre, apellido, grupo y huella del documento desde una lista controlada.
 - Detectar colisiones y posibles cuentas existentes.
 - Generar códigos de activación aleatorios.
 - Producir una salida segura para entregar individualmente los accesos.
@@ -375,11 +379,10 @@ El orden recomendado es el siguiente.
 
 El próximo frente funcional debe ser el **importador administrativo de estudiantes y generador de activaciones**, no la integración de Google ni la publicación inmediata de la actividad.
 
-Antes de programarlo hay que definir solamente:
+Antes de completar su aplicación hay que definir solamente:
 
-1. formato real de la lista de origen —por ejemplo XLSX o CSV—;
-2. columnas disponibles para nombre, apellido, documento y grupo;
-3. convención definitiva del nombre de usuario;
-4. método seguro de entrega de los códigos de activación.
+1. confirmación de la convención final del nombre de usuario;
+2. cómo vincular la etiqueta del archivo con el código de grupo en D1;
+3. método seguro de entrega de los códigos de activación.
 
 Una vez resueltas esas cuatro decisiones, el sistema podrá crear cuentas controladas sin usar la cédula como usuario y conservar una identidad estable aun cuando cambie el documento.

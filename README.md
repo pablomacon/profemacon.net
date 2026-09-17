@@ -37,7 +37,7 @@ Cargar datos ficticios mínimos, sólo después de aplicar la migración:
 npm run db:seed:local
 ```
 
-Las migraciones versionadas están en `migrations/`: núcleo académico (`0001`), actividades autocorregibles (`0002`), acceso y publicaciones (`0003`) y autenticación propia (`0004`). Los datos de prueba están deliberadamente separados en `seed/001-datos-ficticios.sql`. Wrangler guarda la base local en `.wrangler/`, que está ignorada por Git.
+Las migraciones versionadas están en `migrations/`: núcleo académico (`0001`), actividades autocorregibles (`0002`), acceso y publicaciones (`0003`), autenticación propia (`0004`) e importaciones administrativas (`0005`). Los datos de prueba están deliberadamente separados en `seed/001-datos-ficticios.sql`. Wrangler guarda la base local en `.wrangler/`, que está ignorada por Git.
 
 La migración `0003` prepara sesiones con tokens almacenados solamente como hash, asignaciones de docentes y practicantes, materiales versionados, publicaciones por grupo y auditoría. La tabla de identidades externas queda sin uso; la autenticación activa es la implementación local de `0004`.
 

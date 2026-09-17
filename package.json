@@ -6,14 +6,17 @@
   "scripts": {
     "dev": "vite --configLoader runner",
     "build": "tsc -b && vite build --configLoader runner",
-    "test": "node --test tests/auth-crypto.test.ts",
+    "test": "node --test tests/auth-crypto.test.ts tests/student-portfolio.test.mjs",
     "preview": "vite preview",
     "cf-typegen": "wrangler types",
     "db:migrate:local": "wrangler d1 migrations apply profemacon-beta-local --local",
     "db:seed:local": "wrangler d1 execute profemacon-beta-local --local --file=seed/001-datos-ficticios.sql",
-    "db:seed:variables-pilot:local": "wrangler d1 execute profemacon-beta-local --local --file=seed/actividades/programacion-i/unidad-1/variables-java-01.public.sql"
+    "db:seed:variables-pilot:local": "wrangler d1 execute profemacon-beta-local --local --file=seed/actividades/programacion-i/unidad-1/variables-java-01.public.sql",
+    "students:preview": "node scripts/preview-student-portfolio.mjs"
   },
   "dependencies": {
+    "fast-xml-parser": "^5.11.1",
+    "fflate": "^0.8.3",
     "mermaid": "^11.16.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
