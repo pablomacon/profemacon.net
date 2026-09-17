@@ -16,6 +16,10 @@ coverage/
 .env.*
 !.env.example
 
+# Material privado para importaciones locales: claves de corrección y datos de prueba.
+# Nunca se publica ni se envía al navegador.
+private/
+
 # Archivos temporales y del sistema
 *.log
 npm-debug.log*

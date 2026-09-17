@@ -1,10 +1,15 @@
 import { StrictMode, useEffect, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import { Unit0, Unit0Activity } from "./unit0";
+import { Unit0 } from "./courses/programacion-i/unidad-0/lesson";
+import { Unit0Activity } from "./courses/programacion-i/unidad-0/activity";
+import { Unit1 } from "./courses/programacion-i/unidad-1/lesson";
+import { VariablesJavaActivity1 } from "./courses/programacion-i/unidad-1/activity-variables-01";
+import { Login } from "./login";
 import "./styles.css";
 
-type Route = "/" | "/ingresar" | "/mis-cursos" | "/historial" | "/docente" | "/practicante" | "/curso/programacion-i/unidad-0" | "/curso/programacion-i/unidad-0/actividad";
+type Route = "/" | "/ingresar" | "/mis-cursos" | "/historial" | "/docente" | "/practicante" | "/curso/programacion-i/unidad-0" | "/curso/programacion-i/unidad-0/actividad" | "/curso/programacion-i/unidad-1" | "/curso/programacion-i/unidad-1/actividad/variables-java-01";
 type Theme = "dark" | "light";
+type SessionUser = { id: number; username: string; displayName: string; email: string | null; roles: string[] };
 
 const navigation: { label: string; path: Route; icon: string }[] = [
   { label: "Inicio", path: "/", icon: "⌂" },
@@ -14,14 +19,14 @@ const navigation: { label: string; path: Route; icon: string }[] = [
   { label: "Practicante", path: "/practicante", icon: "◇" },
 ];
 
-const supportedRoutes: Route[] = ["/", "/ingresar", "/mis-cursos", "/historial", "/docente", "/practicante", "/curso/programacion-i/unidad-0", "/curso/programacion-i/unidad-0/actividad"];
+const supportedRoutes: Route[] = ["/", "/ingresar", "/mis-cursos", "/historial", "/docente", "/practicante", "/curso/programacion-i/unidad-0", "/curso/programacion-i/unidad-0/actividad", "/curso/programacion-i/unidad-1", "/curso/programacion-i/unidad-1/actividad/variables-java-01"];
 
 const navigate = (path: Route) => {
   window.history.pushState({}, "", path);
   window.dispatchEvent(new PopStateEvent("popstate"));
 };
 
-function Layout({ route, theme, onThemeChange, children }: { route: Route; theme: Theme; onThemeChange: () => void; children: ReactNode }) {
+function Layout({ route, theme, user, onThemeChange, onLogout, children }: { route: Route; theme: Theme; user: SessionUser | null; onThemeChange: () => void; onLogout: () => Promise<void>; children: ReactNode }) {
   return (
     <div className={`app-shell theme-${theme}`}>
       <aside className="sidebar">
@@ -59,7 +64,7 @@ function Layout({ route, theme, onThemeChange, children }: { route: Route; theme
             <button className="theme-toggle" onClick={onThemeChange} aria-label={theme === "dark" ? "Activar modo claro" : "Activar modo oscuro"} title={theme === "dark" ? "Modo claro" : "Modo oscuro"}>
               <span aria-hidden="true">{theme === "dark" ? "☼" : "◐"}</span>
             </button>
-            <button className="sign-in" onClick={() => navigate("/ingresar")}>Ingresar</button>
+            {user ? <div className="session-summary"><span>{user.displayName}</span><button className="sign-in" onClick={() => void onLogout()}>Salir</button></div> : <button className="sign-in" onClick={() => navigate("/ingresar")}>Ingresar</button>}
           </div>
         </header>
         <main className="content">{children}</main>
@@ -119,25 +124,55 @@ function Placeholder({ title, section, detail }: { title: string; section: strin
 }
 
 function Courses() {
-  return <section className="courses-view"><p className="eyebrow">Programación I</p><h1>Mis cursos</h1><article className="course-card"><div><span>Unidad 0</span><h2>Introducción a la programación</h2><p>Informática, computadora, lenguajes de programación, Java y JVM.</p></div><button className="button-primary" onClick={() => navigate("/curso/programacion-i/unidad-0")}>Abrir unidad</button></article></section>;
+  return <section className="courses-view"><p className="eyebrow">Programación I</p><h1>Mis cursos</h1><article className="course-card"><div><span>Unidad 0</span><h2>Introducción a la programación</h2><p>Informática, computadora, lenguajes de programación, Java y JVM.</p></div><button className="button-primary" onClick={() => navigate("/curso/programacion-i/unidad-0")}>Abrir unidad</button></article><article className="course-card course-card-draft"><div><span>Unidad 1 · Borrador local</span><h2>Variables, tipos de datos y operadores</h2><p>Primer programa, variables, cálculos e intercambio de valores. Incluye cuatro videos integrados.</p></div><button className="button-secondary" onClick={() => navigate("/curso/programacion-i/unidad-1")}>Ver borrador</button></article></section>;
 }
 
 function App() {
   const [route, setRoute] = useState<Route>(() => supportedRoutes.includes(window.location.pathname as Route) ? window.location.pathname as Route : "/");
   const [theme, setTheme] = useState<Theme>(() => localStorage.getItem("profemacon-theme") === "light" ? "light" : "dark");
+  const [user, setUser] = useState<SessionUser | null>(null);
   useEffect(() => { const listener = () => setRoute(window.location.pathname as Route); window.addEventListener("popstate", listener); return () => window.removeEventListener("popstate", listener); }, []);
   useEffect(() => { localStorage.setItem("profemacon-theme", theme); }, [theme]);
 
+  async function refreshSession() {
+    const response = await fetch("/api/session", { headers: { Accept: "application/json" } });
+    if (!response.ok) {
+      setUser(null);
+      return;
+    }
+    const data = await response.json() as { user: SessionUser };
+    setUser(data.user);
+    navigate("/mis-cursos");
+  }
+
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    setUser(null);
+    navigate("/");
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/session", { headers: { Accept: "application/json" } }).then(async (response) => {
+      if (!response.ok || cancelled) return;
+      const data = await response.json() as { user: SessionUser };
+      if (!cancelled) setUser(data.user);
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
+
   const view = route === "/" ? <Home />
-    : route === "/ingresar" ? <Placeholder section="Acceso" title="Ingresar" detail="La autenticación se incorporará en una etapa posterior, con sesiones y permisos definidos." />
+    : route === "/ingresar" ? user ? <section className="placeholder-view"><p className="eyebrow">Sesión activa</p><h1>{user.displayName}</h1><div className="placeholder-card"><div className="placeholder-mark">PM</div><div><h2>Ya ingresaste</h2><p>Podés continuar a tus cursos o cerrar la sesión desde la barra superior.</p><button className="button-primary" onClick={() => navigate("/mis-cursos")}>Ir a mis cursos</button></div></div></section> : <Login onAuthenticated={refreshSession} />
     : route === "/mis-cursos" ? <Courses />
     : route === "/curso/programacion-i/unidad-0" ? <Unit0 onBack={() => navigate("/mis-cursos")} onStartActivity={() => navigate("/curso/programacion-i/unidad-0/actividad")} theme={theme} />
     : route === "/curso/programacion-i/unidad-0/actividad" ? <Unit0Activity onBack={() => navigate("/curso/programacion-i/unidad-0")} />
+    : route === "/curso/programacion-i/unidad-1" ? <Unit1 onBack={() => navigate("/mis-cursos")} onOpenActivity={() => navigate("/curso/programacion-i/unidad-1/actividad/variables-java-01")} theme={theme} />
+    : route === "/curso/programacion-i/unidad-1/actividad/variables-java-01" ? <VariablesJavaActivity1 onBack={() => navigate("/curso/programacion-i/unidad-1")} />
     : route === "/historial" ? <Placeholder section="Archivo" title="Historial" detail="Los cursos archivados, resultados y materiales de solo lectura aparecerán en esta vista." />
     : route === "/docente" ? <Placeholder section="Administración" title="Panel docente" detail="La gestión de grupos, inscripciones y resultados se integrará sobre la base D1 local." />
     : <Placeholder section="Acompañamiento" title="Panel de practicante" detail="Esta vista se limitará a los grupos asignados explícitamente." />;
 
-  return <Layout route={route} theme={theme} onThemeChange={() => setTheme(theme === "dark" ? "light" : "dark")}>{view}</Layout>;
+  return <Layout route={route} theme={theme} user={user} onLogout={logout} onThemeChange={() => setTheme(theme === "dark" ? "light" : "dark")}>{view}</Layout>;
 }
 
 createRoot(document.getElementById("root")!).render(<StrictMode><App /></StrictMode>);

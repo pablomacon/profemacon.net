@@ -4,12 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "vite --configLoader runner",
+    "build": "tsc -b && vite build --configLoader runner",
+    "test": "node --test tests/auth-crypto.test.ts",
     "preview": "vite preview",
     "cf-typegen": "wrangler types",
     "db:migrate:local": "wrangler d1 migrations apply profemacon-beta-local --local",
-    "db:seed:local": "wrangler d1 execute profemacon-beta-local --local --file=seed/001-datos-ficticios.sql"
+    "db:seed:local": "wrangler d1 execute profemacon-beta-local --local --file=seed/001-datos-ficticios.sql",
+    "db:seed:variables-pilot:local": "wrangler d1 execute profemacon-beta-local --local --file=seed/actividades/programacion-i/unidad-1/variables-java-01.public.sql"
   },
   "dependencies": {
     "mermaid": "^11.16.0",
