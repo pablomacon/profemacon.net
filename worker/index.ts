@@ -1,10 +1,12 @@
 import { authenticateRequest, listUserRoles } from "./auth";
 import { listCoursesForUser } from "./course-catalog";
 import { activateLocalAccount, clearSessionCookie, loginLocalAccount, readJsonBody, requestHasValidOrigin, revokeLocalSession, sessionCookie } from "./local-auth";
+import { applyStudentImport, previewStudentImport, readStudentImportBody, StudentImportError } from "./student-import";
 
 export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
+  DOCUMENT_HMAC_KEY: string;
 }
 
 const apiHeaders = {
@@ -36,6 +38,23 @@ async function handleApi(request: Request, env: Env, url: URL) {
         : null;
     if (!session) return json({ error: "No fue posible validar las credenciales" }, 401);
     return json({ ok: true }, 200, { "Set-Cookie": sessionCookie(session.token, request) });
+  }
+
+  if (request.method === "POST" && (url.pathname === "/api/student-imports/preview" || url.pathname === "/api/student-imports/apply")) {
+    if (!requestHasValidOrigin(request)) return json({ error: "Origen de solicitud inválido" }, 403);
+    const user = await authenticateRequest(request, env.DB);
+    if (!user) return json({ error: "Sesión requerida" }, 401);
+    try {
+      const payload = await readStudentImportBody(request);
+      const result = url.pathname.endsWith("/preview")
+        ? await previewStudentImport(env.DB, user.id, env.DOCUMENT_HMAC_KEY ?? "", payload)
+        : await applyStudentImport(env.DB, user.id, env.DOCUMENT_HMAC_KEY ?? "", payload);
+      return json(result, url.pathname.endsWith("/apply") ? 201 : 200);
+    } catch (error) {
+      if (error instanceof StudentImportError) return json({ error: error.message }, error.status);
+      console.error("Fallo interno al procesar una importación de estudiantes");
+      return json({ error: "No fue posible procesar la importación" }, 500);
+    }
   }
 
   if (request.method !== "GET") return json({ error: "Método no permitido" }, 405);

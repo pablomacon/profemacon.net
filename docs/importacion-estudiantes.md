@@ -1,6 +1,6 @@
 # Importación administrativa de estudiantes
 
-Estado: lector y validación segura implementados; aplicación a D1 pendiente.
+Estado: lector, validación, previsualización autorizada y aplicación transaccional a D1 implementados; interfaz administrativa pendiente.
 
 ## Formato de origen confirmado
 
@@ -63,7 +63,7 @@ La base provisional se genera con el primer nombre y el primer componente signif
 Ana María de los Santos Pérez → ana.santos
 ```
 
-La base no es todavía el usuario final. Al aplicar una importación se deberá agregar un sufijo corto derivado criptográficamente de la huella del documento, no de sus últimos dígitos. Esto permitirá resolver colisiones sin revelar el documento.
+El usuario final agrega a esa base un sufijo de 12 caracteres derivado de la huella HMAC del documento, nunca de sus últimos dígitos. El nombre de usuario no cambia si posteriormente se agrega otro documento a la cuenta.
 
 ## Documentos
 
@@ -73,14 +73,24 @@ El archivo no informa el tipo de documento. Un valor numérico de siete u ocho d
 
 Antes de guardar un documento, el Worker deberá calcular HMAC-SHA-256 con un secreto externo a D1. Solamente se almacenarán la huella, el tipo confirmado, país emisor y una terminación corta para reconocimiento administrativo.
 
-## Flujo pendiente de aplicación
+## Flujo de aplicación implementado
 
-1. Subir o seleccionar el portafolio.
-2. Ejecutar la previsualización sin persistir datos.
-3. Confirmar la asignatura, edición y grupo de destino.
-4. Resolver documentos ambiguos y posibles coincidencias con cuentas existentes.
-5. Generar nombres de usuario finales y códigos de activación.
-6. Aplicar usuarios, roles, documentos e inscripciones en una transacción.
-7. Registrar solamente la huella y metadatos del lote en `importaciones_estudiantes`.
-8. Producir un archivo privado para la entrega individual de accesos.
-9. No conservar el portafolio original dentro del repositorio.
+1. El lector local extrae únicamente nombres, apellidos y documentos.
+2. Antes de enviar el lote se debe confirmar el tipo y país emisor de cada documento.
+3. `POST /api/student-imports/preview` verifica sesión, origen, autorización docente o administrativa y el mapeo explícito del grupo, sin persistir el lote.
+4. La previsualización informa cuentas nuevas, coincidencias existentes, activaciones necesarias y conflictos.
+5. `POST /api/student-imports/apply` repite todas las validaciones y aplica usuarios, roles, documentos, inscripciones, activaciones y auditoría mediante un único `DB.batch` transaccional.
+6. Una cuenta existente se reutiliza. Sus nombres no se sobrescriben y sólo recibe un código nuevo si todavía no posee credenciales.
+7. Los códigos se devuelven en claro una sola vez; D1 conserva únicamente su SHA-256 y revoca códigos anteriores pendientes.
+8. El archivo original y los documentos en claro no se guardan en D1 ni dentro del repositorio.
+
+La tabla `mapeos_grupo_origen`, creada por la migración `0006`, evita que el nombre de un archivo seleccione libremente un grupo interno. El docente debe tener además una asignación activa sobre el grupo; un administrador puede operar cualquier mapeo activo.
+
+El Worker requiere el secreto `DOCUMENT_HMAC_KEY`, de al menos 32 caracteres, configurado fuera del repositorio. Sin él los endpoints responden con indisponibilidad y no procesan documentos.
+
+## Trabajo pendiente
+
+- construir la pantalla administrativa que carga el XLSX, permite confirmar documentos y llama primero a la previsualización;
+- definir un mecanismo privado para descargar o entregar individualmente los códigos mostrados una sola vez;
+- probar el circuito completo con un lote pequeño ficticio antes de cargar estudiantes reales;
+- configurar y custodiar `DOCUMENT_HMAC_KEY` en cada entorno.

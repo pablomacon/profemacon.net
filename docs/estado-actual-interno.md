@@ -87,7 +87,7 @@ La identidad se divide en tres conceptos:
 2. **Nombre de usuario:** generado de forma controlada e independiente del documento.
 3. **Documento administrativo:** cédula, pasaporte u otro identificador utilizado para conciliación e importación, pero nunca como clave primaria ni usuario cotidiano.
 
-La convención de nombres de usuario todavía debe cerrarse. La orientación acordada es una forma legible como `inicial.apellido.sufijo`, donde el sufijo resuelve colisiones y no procede de la cédula.
+La convención implementada usa `primernombre.primerapellidosignificativo.sufijo`, donde el sufijo son 12 caracteres de la huella HMAC y no procede de los dígitos visibles del documento.
 
 ### 5.1. Cambios de documento
 
@@ -102,7 +102,7 @@ La migración `0004_autenticacion_local.sql` permite guardar múltiples document
 5. mantener intactos usuario, inscripciones, intentos y resultados;
 6. registrar el cambio en auditoría.
 
-El número completo del documento no debe persistirse en D1. El diseño reserva una huella HMAC-SHA-256 calculada por el Worker con un secreto externo a la base y una terminación corta visible para reconocimiento administrativo. El flujo de importación y el secreto HMAC aún no están implementados.
+El número completo del documento no persiste en D1. El Worker calcula HMAC-SHA-256 con `DOCUMENT_HMAC_KEY`, un secreto externo a la base, y conserva sólo la huella y una terminación corta para reconocimiento administrativo. La previsualización y aplicación están implementadas; falta configurar y custodiar el secreto en cada entorno real.
 
 ### 5.2. Activación de cuentas
 
@@ -235,7 +235,7 @@ Falta implementar el circuito transaccional:
 
 ## 8. Estado de la D1 local
 
-Las migraciones `0001` a `0005` están aplicadas. Después de las pruebas y su limpieza, el estado relevante es:
+Las migraciones `0001` a `0006` están aplicadas localmente. Después de las pruebas y su limpieza, el estado relevante incluye un único mapeo de grupo ficticio y cero importaciones aplicadas.
 
 | Entidad | Cantidad o estado |
 | --- | ---: |
@@ -267,7 +267,7 @@ No hay estudiantes, documentos, credenciales ni resultados reales en el reposito
 La implementación actual superó las siguientes comprobaciones:
 
 - compilación TypeScript y build de Vite;
-- aplicación de las cuatro migraciones locales;
+- aplicación de las seis migraciones locales;
 - ejecución repetible de la semilla general;
 - activación de estudiante y docente ficticios;
 - rechazo de un código de activación reutilizado;
@@ -280,6 +280,8 @@ La implementación actual superó las siguientes comprobaciones:
 - respuesta `403` ante un origen ajeno en una operación de autenticación;
 - ausencia de sesiones activas al terminar las pruebas;
 - `git diff --check` sin errores de espacios.
+- 11 pruebas automatizadas aprobadas, incluidas normalización, HMAC documental, nombres de usuario y validación del lote;
+- build de producción aprobado con los endpoints de previsualización y aplicación;
 
 No fue posible realizar la inspección visual automatizada porque esta sesión de trabajo no tenía navegador interactivo disponible. La pantalla compila, pero requiere una revisión manual en escritorio y móvil.
 
@@ -287,9 +289,8 @@ No fue posible realizar la inspección visual automatizada porque esta sesión d
 
 Antes de utilizar datos reales se debe completar:
 
-- generador e importador administrativo de cuentas;
-- generación segura de nombres de usuario y resolución de colisiones;
-- HMAC de documentos con secreto externo a D1;
+- interfaz administrativa para el importador de cuentas;
+- descarga y entrega privada de códigos de activación;
 - custodia y rotación de ese secreto;
 - restablecimiento de contraseña;
 - revocación de todas las sesiones de una cuenta;
@@ -312,7 +313,7 @@ No se deben introducir datos personales reales en semillas, fixtures, Markdown, 
 - Los contenidos no están filtrados por publicación/grupo.
 - El corrector de actividades está desconectado.
 - No hay flujo de restablecimiento de contraseña.
-- No hay importador de estudiantes.
+- El importador tiene API segura, pero todavía no tiene pantalla administrativa.
 - No hay panel docente ni de practicante funcional.
 - No hay pruebas automatizadas ni script de lint.
 - Mermaid genera fragmentos grandes durante el build; es una advertencia de rendimiento, no un error funcional.
@@ -377,12 +378,6 @@ El orden recomendado es el siguiente.
 
 ## 13. Próximo trabajo concreto
 
-El próximo frente funcional debe ser el **importador administrativo de estudiantes y generador de activaciones**, no la integración de Google ni la publicación inmediata de la actividad.
+El próximo frente funcional debe ser la **interfaz administrativa del importador**. Debe ejecutar el lector, permitir confirmar tipo y país de los documentos, mostrar la previsualización y exigir una confirmación separada antes de aplicar.
 
-Antes de completar su aplicación hay que definir solamente:
-
-1. confirmación de la convención final del nombre de usuario;
-2. cómo vincular la etiqueta del archivo con el código de grupo en D1;
-3. método seguro de entrega de los códigos de activación.
-
-Una vez resueltas esas cuatro decisiones, el sistema podrá crear cuentas controladas sin usar la cédula como usuario y conservar una identidad estable aun cuando cambie el documento.
+La decisión aún abierta es el mecanismo privado de entrega de códigos de activación. Hasta resolverlo no deben importarse cuentas reales. El portafolio de 2025 se mantiene únicamente como archivo de validación y no está mapeado a ningún grupo de D1.

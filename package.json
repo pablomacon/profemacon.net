@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --configLoader runner",
     "build": "tsc -b && vite build --configLoader runner",
-    "test": "node --test tests/auth-crypto.test.ts tests/student-portfolio.test.mjs",
+    "test": "node --test tests/auth-crypto.test.ts tests/student-import.test.ts tests/student-portfolio.test.mjs",
     "preview": "vite preview",
     "cf-typegen": "wrangler types",
     "db:migrate:local": "wrangler d1 migrations apply profemacon-beta-local --local",

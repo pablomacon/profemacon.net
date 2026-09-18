@@ -68,6 +68,18 @@ WHERE u.nombre_usuario = 'ana.docente'
   AND a.codigo = 'programacion-demo'
   AND ea.anio = 2026;
 
+-- Mapeo ficticio para ensayar el importador. No coincide con ningun portafolio real.
+INSERT OR IGNORE INTO mapeos_grupo_origen (
+  sistema, asignatura_fuente_normalizada, grupo_fuente_normalizado, anio_fuente, grupo_id
+)
+SELECT 'portafolio', 'programacion demo', 'grupo demo a', 2026, g.id
+FROM grupos g
+JOIN ediciones_anuales ea ON ea.id = g.edicion_anual_id
+JOIN asignaturas a ON a.id = ea.asignatura_id
+WHERE g.codigo = 'DEMO-A'
+  AND a.codigo = 'programacion-demo'
+  AND ea.anio = 2026;
+
 INSERT OR IGNORE INTO contenidos (asignatura_id, codigo, unidad_codigo, titulo, descripcion, estado)
 SELECT id, 'bienvenida-demo', 'inicio', 'Bienvenida al curso de demostración', 'Material ficticio para verificar publicaciones por grupo.', 'activo'
 FROM asignaturas

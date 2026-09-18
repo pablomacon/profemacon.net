@@ -37,7 +37,7 @@ Cargar datos ficticios mínimos, sólo después de aplicar la migración:
 npm run db:seed:local
 ```
 
-Las migraciones versionadas están en `migrations/`: núcleo académico (`0001`), actividades autocorregibles (`0002`), acceso y publicaciones (`0003`), autenticación propia (`0004`) e importaciones administrativas (`0005`). Los datos de prueba están deliberadamente separados en `seed/001-datos-ficticios.sql`. Wrangler guarda la base local en `.wrangler/`, que está ignorada por Git.
+Las migraciones versionadas están en `migrations/`: núcleo académico (`0001`), actividades autocorregibles (`0002`), acceso y publicaciones (`0003`), autenticación propia (`0004`), importaciones administrativas (`0005`) y mapeo seguro de grupos de origen (`0006`). Los datos de prueba están deliberadamente separados en `seed/001-datos-ficticios.sql`. Wrangler guarda la base local en `.wrangler/`, que está ignorada por Git.
 
 La migración `0003` prepara sesiones con tokens almacenados solamente como hash, asignaciones de docentes y practicantes, materiales versionados, publicaciones por grupo y auditoría. La tabla de identidades externas queda sin uso; la autenticación activa es la implementación local de `0004`.
 
@@ -74,4 +74,4 @@ npm run build
 
 ## Próximas etapas
 
-Completar la importación administrativa de cuentas, conectar `Mis cursos` con el catálogo autorizado, habilitar la entrega de actividades y construir los paneles docente y de practicante.
+Construir la interfaz del importador administrativo ya respaldado por el Worker, conectar `Mis cursos` con el catálogo autorizado, habilitar la entrega de actividades y construir los paneles docente y de practicante.
