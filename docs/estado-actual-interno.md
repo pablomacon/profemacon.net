@@ -1,6 +1,6 @@
 # Estado interno de Profe Macón 2.0
 
-Última actualización: 17 de septiembre de 2026.
+Última actualización: 19 de septiembre de 2026.
 
 Este documento es la memoria operativa del proyecto. Describe qué existe, qué funciona realmente, qué decisiones ya fueron tomadas y cuál es el orden recomendado para continuar. No contiene credenciales ni datos personales reales y, por decisión del responsable, todavía no está enlazado desde el `README.md`.
 
@@ -42,13 +42,19 @@ El desarrollo utiliza únicamente una D1 local guardada bajo `.wrangler/`. `wran
 
 ## 3. Estado del repositorio
 
-La rama activa es `main`. El bloque de Unidad 1, actividades, permisos y autenticación propia fue consolidado en un commit local de checkpoint el 17 de septiembre de 2026. Al retomar el proyecto se debe comprobar con `git status` si ese commit ya fue enviado a `origin/main` o continúa solamente en el equipo local.
+La rama activa es `main`. Al comenzar esta revisión el árbol de trabajo estaba limpio; esta actualización deja únicamente el presente documento modificado. Los tres últimos bloques funcionales fueron consolidados en commits locales:
+
+- `caaefa1`: Unidad 1 y autenticación propia;
+- `8ddb60f`: validación segura de portafolios;
+- `667ae7a`: importación segura de estudiantes.
+
+La rama local está tres commits por delante de `origin/main`. Esos checkpoints todavía no fueron enviados al remoto.
 
 Antes de abrir otro frente importante conviene comprobar:
 
 1. que el árbol de trabajo no contenga modificaciones inesperadas;
 2. que las pruebas y la compilación continúen pasando;
-3. que el checkpoint esté respaldado en el remoto antes de incorporar datos o cambios difíciles de reproducir.
+3. que los tres checkpoints locales estén respaldados en el remoto antes de incorporar datos o cambios difíciles de reproducir.
 
 No deben descartarse ni sobrescribirse cambios locales mediante `git reset --hard` o procedimientos equivalentes.
 
@@ -151,6 +157,8 @@ Endpoints actuales:
 | `POST` | `/api/auth/logout` | Implementado y probado |
 | `GET` | `/api/session` | Implementado y protegido |
 | `GET` | `/api/me/courses` | Implementado y protegido |
+| `POST` | `/api/student-imports/preview` | Implementado; requiere sesión, origen válido y autorización sobre el grupo |
+| `POST` | `/api/student-imports/apply` | Implementado; repite las validaciones y aplica el lote transaccionalmente |
 
 La interfaz `/ingresar` permite alternar entre ingreso y primera activación. Cuando existe una sesión, la cabecera muestra el nombre de la persona y un botón para salir.
 
@@ -279,9 +287,11 @@ La implementación actual superó las siguientes comprobaciones:
 - respuesta `401` después del cierre;
 - respuesta `403` ante un origen ajeno en una operación de autenticación;
 - ausencia de sesiones activas al terminar las pruebas;
-- `git diff --check` sin errores de espacios.
+- `git diff --check` sin errores de espacios;
 - 11 pruebas automatizadas aprobadas, incluidas normalización, HMAC documental, nombres de usuario y validación del lote;
-- build de producción aprobado con los endpoints de previsualización y aplicación;
+- build de producción aprobado con los endpoints de previsualización y aplicación.
+
+El portafolio real de referencia continúa produciendo una previsualización agregada de 19 filas válidas, cero filas inválidas, cero documentos duplicados y cero colisiones en las bases de usuario. Esa comprobación no imprime nombres ni documentos y no aplica el archivo a D1.
 
 No fue posible realizar la inspección visual automatizada porque esta sesión de trabajo no tenía navegador interactivo disponible. La pantalla compila, pero requiere una revisión manual en escritorio y móvil.
 
@@ -291,7 +301,7 @@ Antes de utilizar datos reales se debe completar:
 
 - interfaz administrativa para el importador de cuentas;
 - descarga y entrega privada de códigos de activación;
-- custodia y rotación de ese secreto;
+- configuración, custodia y estrategia de rotación de `DOCUMENT_HMAC_KEY`;
 - restablecimiento de contraseña;
 - revocación de todas las sesiones de una cuenta;
 - limitación de frecuencia por dirección/origen además del bloqueo por cuenta;
@@ -308,14 +318,14 @@ No se deben introducir datos personales reales en semillas, fixtures, Markdown, 
 
 ## 11. Deuda técnica conocida
 
-- El árbol de trabajo contiene muchas modificaciones sin commit.
+- La rama local contiene tres commits todavía no enviados a `origin/main`.
 - “Mis cursos” todavía está codificado en React.
 - Los contenidos no están filtrados por publicación/grupo.
 - El corrector de actividades está desconectado.
 - No hay flujo de restablecimiento de contraseña.
 - El importador tiene API segura, pero todavía no tiene pantalla administrativa.
 - No hay panel docente ni de practicante funcional.
-- No hay pruebas automatizadas ni script de lint.
+- Hay pruebas automatizadas para criptografía, lectura del portafolio y preparación del lote, pero todavía no existe un script de lint ni pruebas de integración completas para los endpoints del importador.
 - Mermaid genera fragmentos grandes durante el build; es una advertencia de rendimiento, no un error funcional.
 - `npm audit` informa 11 avisos en la cadena preexistente de herramientas de Cloudflare y Mermaid (7 altos y 4 moderados al 17 de septiembre de 2026). Las dependencias nuevas del lector XLSX no aparecen afectadas. Se debe actualizar y volver a probar esa cadena antes de un despliegue real.
 - Wrangler intenta escribir registros bajo el perfil del usuario y puede mostrar advertencias de permisos dentro del entorno restringido. Las operaciones locales se completan igualmente.
@@ -338,12 +348,14 @@ El orden recomendado es el siguiente.
 - Completado: reconocer el formato de portafolio y el grupo desde el nombre del archivo.
 - Completado: separar nombre y apellido e ignorar nacimiento y carné de salud.
 - Completado: previsualizar y validar sin mostrar datos personales.
-- Pendiente: definir formalmente el sufijo definitivo del nombre de usuario.
-- Pendiente: aplicar nombre, apellido, grupo y huella del documento desde una lista controlada.
-- Detectar colisiones y posibles cuentas existentes.
-- Generar códigos de activación aleatorios.
-- Producir una salida segura para entregar individualmente los accesos.
-- Permitir agregar una nueva cédula a quien estaba registrado con pasaporte, sin crear otra cuenta.
+- Completado: definir el nombre de usuario con una base legible y 12 caracteres derivados del HMAC.
+- Completado: vincular etiquetas de origen con grupos internos mediante un mapeo explícito.
+- Completado: detectar duplicados, colisiones y posibles cuentas existentes.
+- Completado: aplicar usuarios, roles, documentos, inscripciones, activaciones y auditoría mediante un lote transaccional.
+- Completado: generar códigos de activación aleatorios y guardar solamente sus hashes.
+- Pendiente: construir la interfaz administrativa de carga, revisión y doble confirmación.
+- Pendiente: producir una salida privada para entregar individualmente los accesos.
+- Pendiente: implementar la operación administrativa que agrega una nueva cédula a quien estaba registrado con pasaporte, sin crear otra cuenta. El esquema ya permite conservar ambos documentos.
 
 ### Hito 3 — Catálogo autenticado
 
@@ -380,4 +392,4 @@ El orden recomendado es el siguiente.
 
 El próximo frente funcional debe ser la **interfaz administrativa del importador**. Debe ejecutar el lector, permitir confirmar tipo y país de los documentos, mostrar la previsualización y exigir una confirmación separada antes de aplicar.
 
-La decisión aún abierta es el mecanismo privado de entrega de códigos de activación. Hasta resolverlo no deben importarse cuentas reales. El portafolio de 2025 se mantiene únicamente como archivo de validación y no está mapeado a ningún grupo de D1.
+La decisión aún abierta es el mecanismo privado de entrega de códigos de activación. Hasta resolverlo, configurar `DOCUMENT_HMAC_KEY` y completar las pruebas de integración no deben importarse cuentas reales. El portafolio de 2025 se mantiene únicamente como archivo de validación y no está mapeado a ningún grupo de D1.
