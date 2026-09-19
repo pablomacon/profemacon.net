@@ -299,13 +299,13 @@ La implementación actual superó las siguientes comprobaciones:
 
 El portafolio real de referencia continúa produciendo una previsualización agregada de 19 filas válidas, cero filas inválidas, cero documentos duplicados y cero colisiones en las bases de usuario. Esa comprobación no imprime nombres ni documentos y no aplica el archivo a D1.
 
-Playwright ejecutó ocho comprobaciones en Chromium: acceso sin sesión, restricción por rol, estado inicial del asistente y lectura local del portafolio autorizado, cada una en escritorio y móvil. La inspección visual de las referencias confirmó que la pantalla es legible y no desborda horizontalmente. Las capturas contienen sólo el estado vacío y una identidad docente ficticia; la prueba con el portafolio real no genera captura, traza ni video.
+Playwright ejecutó diez comprobaciones en Chromium: acceso sin sesión, restricción por rol, estado inicial del asistente, lectura local del portafolio autorizado y entrega individual ficticia, cada una en escritorio y móvil. La inspección visual de las referencias confirmó que las pantallas son legibles y no desbordan horizontalmente. Las capturas contienen sólo estados e identidades ficticias; la prueba con el portafolio real no genera captura, traza ni video.
 
 ## 10. Seguridad y privacidad pendientes
 
 Antes de utilizar datos reales se debe completar:
 
-- descarga y entrega privada de códigos de activación;
+- revocación y reemisión administrativa de códigos de activación perdidos;
 - configuración, custodia y estrategia de rotación de `DOCUMENT_HMAC_KEY`;
 - restablecimiento de contraseña;
 - revocación de todas las sesiones de una cuenta;
@@ -327,7 +327,7 @@ No se deben introducir datos personales reales en semillas, fixtures, Markdown, 
 - Los contenidos no están filtrados por publicación/grupo.
 - El corrector de actividades está desconectado.
 - No hay flujo de restablecimiento de contraseña.
-- El importador tiene API, pantalla administrativa y cobertura de navegador para su estado inicial; falta cubrir con datos ficticios las etapas posteriores del asistente.
+- El importador tiene API, pantalla administrativa y cobertura de navegador para el estado inicial y la entrega individual; falta una prueba de integración real de todas las etapas contra D1.
 - No hay panel docente ni de practicante funcional.
 - Hay pruebas automatizadas para criptografía, lectura del portafolio y preparación del lote, pero todavía no existe un script de lint ni pruebas de integración completas para los endpoints del importador.
 - Mermaid genera fragmentos grandes durante el build; es una advertencia de rendimiento, no un error funcional.
@@ -358,7 +358,8 @@ El orden recomendado es el siguiente.
 - Completado: aplicar usuarios, roles, documentos, inscripciones, activaciones y auditoría mediante un lote transaccional.
 - Completado: generar códigos de activación aleatorios y guardar solamente sus hashes.
 - Completado: construir la interfaz administrativa de carga, revisión y doble confirmación.
-- Pendiente: producir una salida privada para entregar individualmente los accesos.
+- Completado: entregar cada acceso mediante copia individual o ficha imprimible y retirar los códigos de la memoria al finalizar.
+- Pendiente: implementar la revocación y reemisión administrativa de una activación perdida.
 - Pendiente: implementar la operación administrativa que agrega una nueva cédula a quien estaba registrado con pasaporte, sin crear otra cuenta. El esquema ya permite conservar ambos documentos.
 
 ### Hito 3 — Catálogo autenticado
@@ -394,6 +395,6 @@ El orden recomendado es el siguiente.
 
 ## 13. Próximo trabajo concreto
 
-El próximo frente funcional debe ser definir el **mecanismo privado de entrega de códigos de activación** y documentar su ciclo de vida. Después corresponde preparar la configuración remota de `DOCUMENT_HMAC_KEY` y convertir “Mis cursos” en una vista autenticada.
+El próximo frente funcional debe ser implementar la **revocación y reemisión administrativa de códigos de activación** sin exponer su valor anterior. Después corresponde preparar la configuración remota de `DOCUMENT_HMAC_KEY` y convertir “Mis cursos” en una vista autenticada.
 
-Hasta resolver la entrega y configurar el secreto remoto no deben importarse cuentas reales. El portafolio de 2025 se mantiene únicamente como archivo de validación y no está mapeado a ningún grupo de D1.
+Hasta resolver la reemisión administrativa y configurar el secreto remoto no deben importarse cuentas reales. El portafolio de 2025 se mantiene únicamente como archivo de validación y no está mapeado a ningún grupo de D1.

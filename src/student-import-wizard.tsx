@@ -1,4 +1,5 @@
-import { useState, type ChangeEvent } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
+import { activationCredentialText, printActivationCredential, type ActivationCredential } from "./activation-delivery";
 import type { StudentPortfolio } from "./student-portfolio";
 
 type DocumentType = "cedula_uy" | "pasaporte" | "otro";
@@ -13,7 +14,7 @@ type ImportPlan = {
 
 type AppliedImport = ImportPlan & {
   importId: string;
-  activationCredentials: { sourceRow: number; displayName: string; username: string; activationCode: string }[];
+  activationCredentials: ActivationCredential[];
   activationCodesAreShownOnce: true;
 };
 
@@ -42,14 +43,30 @@ export function StudentImportWizard({ onBack }: { onBack: () => void }) {
   const [applyConfirmation, setApplyConfirmation] = useState(false);
   const [plan, setPlan] = useState<ImportPlan | null>(null);
   const [applied, setApplied] = useState<AppliedImport | null>(null);
+  const [deliveredRows, setDeliveredRows] = useState<Set<number>>(() => new Set());
+  const [copiedRow, setCopiedRow] = useState<number | null>(null);
+  const [deliveryFinished, setDeliveryFinished] = useState(false);
   const [status, setStatus] = useState<"idle" | "reading" | "previewing" | "applying">("idle");
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!applied?.activationCredentials.length) return;
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeLeaving);
+    return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
+  }, [applied]);
 
   async function selectFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     setError(null);
     setPlan(null);
     setApplied(null);
+    setDeliveredRows(new Set());
+    setCopiedRow(null);
+    setDeliveryFinished(false);
     setAdministrativeConfirmation(false);
     setApplyConfirmation(false);
     if (!file) {
@@ -131,6 +148,9 @@ export function StudentImportWizard({ onBack }: { onBack: () => void }) {
         body: JSON.stringify(payload()),
       });
       setApplied(await responseJson<AppliedImport>(response));
+      setDeliveredRows(new Set());
+      setCopiedRow(null);
+      setDeliveryFinished(false);
       setPlan(null);
       setPortfolio(null);
       setStudents([]);
@@ -146,6 +166,40 @@ export function StudentImportWizard({ onBack }: { onBack: () => void }) {
   const incompleteDocuments = students.filter((student) => !student.documentType || !/^[A-Z]{2}$/i.test(student.countryCode));
   const fileProblems = (portfolio?.errors.length ?? 0) + (portfolio?.diagnostics.duplicateDocuments ?? 0);
   const canPreview = Boolean(portfolio && students.length > 0 && incompleteDocuments.length === 0 && fileProblems === 0 && administrativeConfirmation);
+  const pendingDeliveries = applied?.activationCredentials.filter((credential) => !deliveredRows.has(credential.sourceRow)).length ?? 0;
+  const activationUrl = `${window.location.origin}/ingresar`;
+
+  async function copyCredential(credential: ActivationCredential) {
+    setError(null);
+    try {
+      await navigator.clipboard.writeText(activationCredentialText(credential, activationUrl));
+      setCopiedRow(credential.sourceRow);
+    } catch {
+      setError("El navegador no permitió copiar. Use la ficha imprimible o copie los campos manualmente.");
+    }
+  }
+
+  function printCredential(credential: ActivationCredential) {
+    setError(null);
+    if (!printActivationCredential(credential, activationUrl)) setError("El navegador bloqueó la ficha imprimible. Habilite las ventanas emergentes para este sitio e intente nuevamente.");
+  }
+
+  function toggleDelivered(sourceRow: number, delivered: boolean) {
+    setDeliveredRows((current) => {
+      const next = new Set(current);
+      if (delivered) next.add(sourceRow);
+      else next.delete(sourceRow);
+      return next;
+    });
+  }
+
+  function finishDelivery() {
+    if (pendingDeliveries !== 0) return;
+    setApplied(null);
+    setDeliveredRows(new Set());
+    setCopiedRow(null);
+    setDeliveryFinished(true);
+  }
 
   return (
     <section className="import-view">
@@ -219,8 +273,18 @@ export function StudentImportWizard({ onBack }: { onBack: () => void }) {
       {applied && <section className="import-panel import-result">
         <div className="import-panel-heading"><div><p className="eyebrow">Paso 4</p><h2>Importación aplicada</h2></div><span className="status-pill is-safe">Completada</span></div>
         <p>Se procesaron {applied.summary.validRows} inscripciones en <strong>{applied.targetGroup.name}</strong>.</p>
-        {applied.activationCredentials.length > 0 ? <><div className="import-alert is-warning"><strong>Estos códigos se muestran una sola vez.</strong><p>No se almacenan en texto claro. No cierre ni recargue esta pantalla hasta completar su entrega por un medio privado.</p></div><div className="import-table-wrap"><table className="import-table credentials-table"><thead><tr><th>Estudiante</th><th>Usuario</th><th>Código de activación</th></tr></thead><tbody>{applied.activationCredentials.map((credential) => <tr key={credential.sourceRow}><td>{credential.displayName}</td><td>{credential.username}</td><td><code>{credential.activationCode}</code></td></tr>)}</tbody></table></div></> : <p className="privacy-note">No fue necesario generar nuevos códigos de activación.</p>}
+        {applied.activationCredentials.length > 0 ? <><div className="import-alert is-warning"><strong>Estos códigos se muestran una sola vez.</strong><p>Entregue cada acceso únicamente a su titular. No se guardan en texto claro y desaparecerán al finalizar, cerrar o recargar esta pantalla.</p></div><div className="delivery-heading"><div><h3>Entrega individual</h3><p>{pendingDeliveries} pendiente(s) de {applied.activationCredentials.length}</p></div></div><div className="credential-cards">{applied.activationCredentials.map((credential) => {
+          const delivered = deliveredRows.has(credential.sourceRow);
+          return <article className={`credential-card${delivered ? " is-delivered" : ""}`} key={credential.sourceRow}>
+            <div className="credential-card-heading"><div><span>Estudiante</span><h3>{credential.displayName}</h3></div><span className={`status-pill${delivered ? " is-safe" : ""}`}>{delivered ? "Entregado" : "Pendiente"}</span></div>
+            <dl><div><dt>Usuario</dt><dd>{credential.username}</dd></div><div><dt>Código de activación</dt><dd><code>{credential.activationCode}</code></dd></div></dl>
+            <div className="credential-actions"><button className="button-secondary" type="button" onClick={() => void copyCredential(credential)}>{copiedRow === credential.sourceRow ? "Copiado" : "Copiar acceso"}</button><button className="button-secondary" type="button" onClick={() => printCredential(credential)}>Imprimir ficha</button></div>
+            <label className="delivery-check"><input type="checkbox" checked={delivered} onChange={(event) => toggleDelivered(credential.sourceRow, event.target.checked)} /> Confirmo que entregué este acceso solamente al estudiante.</label>
+          </article>;
+        })}</div><div className="finish-delivery"><p>Al finalizar se borrarán los códigos de esta pantalla y no podrán recuperarse.</p><button className="button-primary" type="button" disabled={pendingDeliveries !== 0} onClick={finishDelivery}>Finalizar y borrar códigos</button></div></> : <p className="privacy-note">No fue necesario generar nuevos códigos de activación.</p>}
       </section>}
+
+      {deliveryFinished && <section className="import-panel delivery-complete" role="status"><p className="eyebrow">Entrega finalizada</p><h2>Códigos retirados de la pantalla</h2><p>Los accesos se marcaron como entregados y sus códigos en claro ya no permanecen en esta vista.</p></section>}
 
       {error && <div className="import-alert is-error" role="alert"><strong>No fue posible continuar.</strong><p>{error}</p></div>}
     </section>

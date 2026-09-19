@@ -78,4 +78,4 @@ Las pruebas de navegador usan Chromium mediante Playwright y recorren el importa
 
 ## Próximas etapas
 
-Definir la entrega privada de códigos de activación, conectar `Mis cursos` con el catálogo autorizado, habilitar la entrega de actividades y ampliar los paneles docente y de practicante.
+Implementar la reemisión administrativa de activaciones perdidas, conectar `Mis cursos` con el catálogo autorizado, habilitar la entrega de actividades y ampliar los paneles docente y de practicante.

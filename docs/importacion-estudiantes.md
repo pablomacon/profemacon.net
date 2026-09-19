@@ -1,6 +1,6 @@
 # Importación administrativa de estudiantes
 
-Estado: lector compartido, validación, interfaz administrativa, previsualización autorizada y aplicación transaccional a D1 implementados. La entrega privada de activaciones y la configuración del entorno real continúan pendientes.
+Estado: lector compartido, validación, interfaz administrativa, previsualización autorizada, aplicación transaccional a D1 y entrega individual de activaciones implementados. La configuración del entorno real y la reemisión administrativa de códigos continúan pendientes.
 
 ## Formato de origen confirmado
 
@@ -92,10 +92,15 @@ La ruta `/docente/importar-estudiantes` implementa el asistente de cuatro etapas
 
 Playwright comprueba el acceso sin sesión, la restricción para estudiantes, el estado inicial del asistente y la ausencia de desbordamiento horizontal en escritorio y móvil. La comprobación opcional con un portafolio autorizado valida la lectura completa en el navegador sin solicitar previsualización al Worker, aplicar el lote ni generar capturas con datos personales.
 
+Después de aplicar un lote, cada activación se presenta como una ficha individual. El docente puede copiar solamente ese acceso o abrir una versión imprimible que no incluye documento, cédula ni pasaporte. Cada ficha debe marcarse como entregada antes de habilitar **Finalizar y borrar códigos**. Esa confirmación sirve para ordenar la operación actual y no se persiste como prueba de entrega. No existe descarga masiva ni integración con servicios externos.
+
+Mientras haya códigos en claro la pantalla advierte antes de cerrar o recargar. Si se abandona la vista, los valores no pueden recuperarse porque D1 conserva sólo sus hashes. Antes del piloto debe existir una operación administrativa separada para revocar y reemitir una activación perdida.
+
 El entorno local usa `.dev.vars`, ignorado por Git. `.dev.vars.example` documenta únicamente el nombre de la variable y nunca debe contener una clave real.
 
 ## Trabajo pendiente
 
-- definir un mecanismo privado para descargar o entregar individualmente los códigos mostrados una sola vez;
 - configurar y custodiar `DOCUMENT_HMAC_KEY` en el entorno remoto;
-- ampliar las pruebas de navegador al flujo de confirmación, previsualización y aplicación usando exclusivamente datos ficticios.
+- implementar la revocación y reemisión administrativa de una activación perdida;
+- decidir si el piloto necesita registrar en auditoría la fecha y el medio de entrega, sin guardar el código;
+- agregar una prueba de navegador del flujo completo contra una D1 descartable usando exclusivamente datos ficticios.

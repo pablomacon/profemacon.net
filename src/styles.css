@@ -256,6 +256,26 @@ h1 span { color: #978cda; }
 .import-alert.is-warning { background: rgba(156, 111, 47, .15); border-color: #765d39; color: #e2c390; }
 .danger-action { background: #765b9f; border-color: #765b9f; }
 .credentials-table code { color: #f0dcae; font-size: 12px; overflow-wrap: anywhere; }
+.delivery-heading { align-items: center; display: flex; justify-content: space-between; margin: 24px 0 10px; }
+.delivery-heading h3 { color: #efedf6; margin: 0; }
+.delivery-heading p { color: #aaa8b4; font-size: 12px; margin: 5px 0 0; }
+.credential-cards { display: grid; gap: 12px; }
+.credential-card { background: #121318; border: 1px solid #393a45; border-radius: 9px; padding: 17px; }
+.credential-card.is-delivered { border-color: #477963; }
+.credential-card-heading { align-items: flex-start; display: flex; gap: 16px; justify-content: space-between; }
+.credential-card-heading span:first-child, .credential-card dt { color: #8f8e9a; font-size: 10px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.credential-card-heading h3 { color: #ece9f4; font-size: 16px; margin: 4px 0 0; }
+.credential-card dl { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 16px 0; }
+.credential-card dl div { background: #1b1c23; border-radius: 7px; padding: 11px; }
+.credential-card dd { color: #dedbe6; font-size: 13px; font-weight: 700; margin: 5px 0 0; overflow-wrap: anywhere; }
+.credential-card code { color: #f0dcae; font-size: 12px; }
+.credential-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.delivery-check { align-items: flex-start; color: #c7c4d0; display: flex; font-size: 12px; gap: 8px; line-height: 1.5; margin-top: 15px; }
+.delivery-check input { accent-color: #9288d5; margin-top: 2px; }
+.finish-delivery { align-items: center; border-top: 1px solid #34353f; display: flex; gap: 18px; justify-content: space-between; margin-top: 20px; padding-top: 18px; }
+.finish-delivery p, .delivery-complete > p:last-child { color: #aaa8b4; font-size: 12px; line-height: 1.6; margin: 0; }
+.finish-delivery .button-primary:disabled { cursor: not-allowed; opacity: .45; }
+.delivery-complete { border-color: #477963; }
 
 /* Modo claro */
 .theme-light { background: #f7f7fa; color: #24242d; }
@@ -333,4 +353,4 @@ h1 span { color: #978cda; }
 @media (max-width: 780px) { .sidebar { display: none; } .topbar { height: 64px; justify-content: space-between; padding: 0 20px; position: sticky; top: 0; z-index: 20; background: inherit; } .mobile-brand { background: transparent; border: 0; cursor: pointer; display: block; height: 37px; padding: 0; } .mobile-brand img { height: 37px; width: auto; } .environment { display: none; } .content { padding: 34px 22px 55px; } .intro { padding-top: 8px; } .course-card { align-items: flex-start; flex-direction: column; gap: 18px; } .unit-context-nav { top: 64px; } .unit-figures { grid-template-columns: 1fr; } .unit-figures img { height: 200px; } .activity-heading, .unit-activity-prompt, .video-lesson { align-items: flex-start; flex-direction: column; gap: 16px; } .video-lesson { display: flex; } .video-lesson-copy { padding: 3px; } .video-frame { width: 100%; } .match-list label, .order-list label { align-items: stretch; grid-template-columns: 1fr; gap: 6px; } .gallery-dialog { padding: 12px; } .gallery-panel { max-height: calc(100vh - 24px); max-width: calc(100vw - 24px); } .gallery-stage { padding: 16px 50px; } .gallery-arrow { height: 38px; width: 35px; } .gallery-arrow.previous { left: 8px; } .gallery-arrow.next { right: 8px; } }
 @media (max-width: 430px) { h1 { font-size: 2.25rem; } .intro-actions, .activity-actions { align-items: stretch; flex-direction: column; } .intro-actions button, .activity-actions button { width: 100%; } .unit-meta { gap: 6px; } }
 @media (max-width: 780px) { .unit-activity-card { align-items: flex-start; flex-direction: column; gap: 18px; } .activity-access-panel dl { grid-template-columns: 1fr; } }
-@media (max-width: 620px) { .import-steps { grid-template-columns: repeat(2, 1fr); } .import-summary, .import-summary.source-summary { grid-template-columns: 1fr; } .import-panel-heading { align-items: stretch; flex-direction: column; } .status-pill { align-self: flex-start; } }
+@media (max-width: 620px) { .import-steps { grid-template-columns: repeat(2, 1fr); } .import-summary, .import-summary.source-summary, .credential-card dl { grid-template-columns: 1fr; } .import-panel-heading, .finish-delivery { align-items: stretch; flex-direction: column; } .status-pill { align-self: flex-start; } .credential-actions { flex-direction: column; } .credential-actions button { width: 100%; } }
