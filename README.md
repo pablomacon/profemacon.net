@@ -58,8 +58,12 @@ Las claves de corrección se importan por separado desde `private/`, carpeta ign
 ## Verificaciones
 
 ```bash
+npm test
 npm run build
+npm run test:e2e
 ```
+
+Las pruebas de navegador usan Chromium mediante Playwright y recorren el importador en perfiles de escritorio y móvil. Las referencias visuales versionadas contienen solamente datos ficticios.
 
 ## Estructura
 

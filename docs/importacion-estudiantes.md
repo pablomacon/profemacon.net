@@ -90,11 +90,12 @@ El Worker requiere el secreto `DOCUMENT_HMAC_KEY`, de al menos 32 caracteres, co
 
 La ruta `/docente/importar-estudiantes` implementa el asistente de cuatro etapas. El lector funciona tanto desde el navegador como desde el comando de consola mediante un único núcleo compartido. Después de una aplicación correcta, la interfaz descarta de memoria el portafolio y los documentos normalizados; conserva solamente el resultado y los códigos efímeros mientras la pantalla permanezca abierta.
 
+Playwright comprueba el acceso sin sesión, la restricción para estudiantes, el estado inicial del asistente y la ausencia de desbordamiento horizontal en escritorio y móvil. La comprobación opcional con un portafolio autorizado valida la lectura completa en el navegador sin solicitar previsualización al Worker, aplicar el lote ni generar capturas con datos personales.
+
 El entorno local usa `.dev.vars`, ignorado por Git. `.dev.vars.example` documenta únicamente el nombre de la variable y nunca debe contener una clave real.
 
 ## Trabajo pendiente
 
 - definir un mecanismo privado para descargar o entregar individualmente los códigos mostrados una sola vez;
-- realizar una revisión visual manual de la interfaz en escritorio y móvil;
 - configurar y custodiar `DOCUMENT_HMAC_KEY` en el entorno remoto;
-- agregar pruebas de navegador cuando exista un navegador automatizado disponible.
+- ampliar las pruebas de navegador al flujo de confirmación, previsualización y aplicación usando exclusivamente datos ficticios.

@@ -6,13 +6,13 @@ Estado: primera implementación local validada.
 
 La plataforma no usa Google OAuth para el acceso habitual. Cada persona se relaciona con los datos académicos mediante el `id` interno de `usuarios`, que no cambia aunque cambien su documento, nombre de usuario o contraseña.
 
-El nombre de usuario se genera de forma controlada y no contiene la cédula ni el pasaporte. Una convención inicial posible es `inicial.apellido.sufijo`, donde el sufijo resuelve colisiones y no se deriva del documento.
+El nombre de usuario se genera de forma controlada y no contiene la cédula ni el pasaporte. La convención implementada es `primernombre.primerapellidosignificativo.sufijo`, donde el sufijo usa 12 caracteres de la huella HMAC y no revela dígitos del documento.
 
 ## Documentos
 
 Los documentos son identificadores administrativos, no credenciales. `documentos_usuario` admite cédula uruguaya, pasaporte u otro documento, conserva identificadores históricos y permite marcar solamente uno como principal.
 
-El número completo no se guarda. Antes de persistirlo, el Worker deberá normalizarlo y calcular un HMAC-SHA-256 con un secreto dedicado almacenado fuera de D1. La base conserva la huella y una terminación corta para reconocimiento administrativo. El flujo de importación que realice ese cálculo aún no está implementado.
+El número completo no se guarda. Antes de persistirlo, el Worker lo normaliza y calcula un HMAC-SHA-256 con un secreto dedicado almacenado fuera de D1. La base conserva la huella y una terminación corta para reconocimiento administrativo. La previsualización y aplicación del importador ya realizan este cálculo; falta configurar y custodiar el secreto en el entorno remoto.
 
 Cuando un estudiante sustituye un pasaporte por una cédula:
 
@@ -39,7 +39,6 @@ Las contraseñas se derivan con PBKDF2-HMAC-SHA-256, sal aleatoria por cuenta y 
 
 ## Pendiente antes de usar datos reales
 
-- Implementar la importación administrativa y el HMAC de documentos.
 - Definir custodia y rotación del secreto HMAC.
 - Implementar restablecimiento de contraseña por docente o administrador.
 - Revisar los plazos de sesión con la dinámica real del aula.

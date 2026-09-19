@@ -42,14 +42,16 @@ El desarrollo utiliza únicamente una D1 local guardada bajo `.wrangler/`. `wran
 
 ## 3. Estado del repositorio
 
-La rama activa es `main`. Los checkpoints anteriores fueron enviados a `origin/main` antes de comenzar la interfaz del importador:
+La rama activa es `main`. Los checkpoints funcionales enviados a `origin/main` incluyen:
 
 - `caaefa1`: Unidad 1 y autenticación propia;
 - `8ddb60f`: validación segura de portafolios;
 - `667ae7a`: importación segura de estudiantes.
+- `5c2ab4e`: asistente de importación estudiantil;
 - `7ed3c6a`: actualización del estado interno.
+- `265301a`: instalación de Playwright para pruebas visuales.
 
-El bloque de interfaz, lector compartido y prueba de integración quedó consolidado en un nuevo checkpoint funcional.
+El bloque de pruebas visuales y de navegador se mantiene separado para que sus referencias gráficas puedan revisarse en Git.
 
 Antes de abrir otro frente importante conviene comprobar:
 
@@ -297,7 +299,7 @@ La implementación actual superó las siguientes comprobaciones:
 
 El portafolio real de referencia continúa produciendo una previsualización agregada de 19 filas válidas, cero filas inválidas, cero documentos duplicados y cero colisiones en las bases de usuario. Esa comprobación no imprime nombres ni documentos y no aplica el archivo a D1.
 
-No fue posible realizar la inspección visual automatizada porque esta sesión de trabajo no tenía navegador interactivo disponible. La pantalla compila, pero requiere una revisión manual en escritorio y móvil.
+Playwright ejecutó ocho comprobaciones en Chromium: acceso sin sesión, restricción por rol, estado inicial del asistente y lectura local del portafolio autorizado, cada una en escritorio y móvil. La inspección visual de las referencias confirmó que la pantalla es legible y no desborda horizontalmente. Las capturas contienen sólo el estado vacío y una identidad docente ficticia; la prueba con el portafolio real no genera captura, traza ni video.
 
 ## 10. Seguridad y privacidad pendientes
 
@@ -321,12 +323,11 @@ No se deben introducir datos personales reales en semillas, fixtures, Markdown, 
 
 ## 11. Deuda técnica conocida
 
-- La rama local contiene tres commits todavía no enviados a `origin/main`.
 - “Mis cursos” todavía está codificado en React.
 - Los contenidos no están filtrados por publicación/grupo.
 - El corrector de actividades está desconectado.
 - No hay flujo de restablecimiento de contraseña.
-- El importador tiene API y pantalla administrativa; falta una revisión visual manual porque no hubo navegador conectado durante la comprobación automatizada.
+- El importador tiene API, pantalla administrativa y cobertura de navegador para su estado inicial; falta cubrir con datos ficticios las etapas posteriores del asistente.
 - No hay panel docente ni de practicante funcional.
 - Hay pruebas automatizadas para criptografía, lectura del portafolio y preparación del lote, pero todavía no existe un script de lint ni pruebas de integración completas para los endpoints del importador.
 - Mermaid genera fragmentos grandes durante el build; es una advertencia de rendimiento, no un error funcional.
@@ -344,7 +345,7 @@ El orden recomendado es el siguiente.
 - Completado: crear pruebas mínimas de criptografía de autenticación.
 - Completado: confirmar en Git el bloque actual.
 - Pendiente: hacer revisión visual de ingreso/activación.
-- Pendiente: enviar el checkpoint al remoto cuando corresponda.
+- Completado: instalar Playwright y revisar el importador en escritorio y móvil.
 
 ### Hito 2 — Importación controlada de estudiantes
 
@@ -395,4 +396,4 @@ El orden recomendado es el siguiente.
 
 El próximo frente funcional debe ser definir el **mecanismo privado de entrega de códigos de activación** y documentar su ciclo de vida. Después corresponde preparar la configuración remota de `DOCUMENT_HMAC_KEY` y convertir “Mis cursos” en una vista autenticada.
 
-Hasta resolver la entrega, configurar el secreto remoto y realizar la revisión visual no deben importarse cuentas reales. El portafolio de 2025 se mantiene únicamente como archivo de validación y no está mapeado a ningún grupo de D1.
+Hasta resolver la entrega y configurar el secreto remoto no deben importarse cuentas reales. El portafolio de 2025 se mantiene únicamente como archivo de validación y no está mapeado a ningún grupo de D1.
