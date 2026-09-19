@@ -1,4 +1,5 @@
 import { authenticateRequest, listUserRoles } from "./auth";
+import { ActivationAdminError, listActivationCandidates, parseReissuePayload, reissueAccountActivation } from "./account-activation-admin";
 import { listCoursesForUser } from "./course-catalog";
 import { activateLocalAccount, clearSessionCookie, loginLocalAccount, readJsonBody, requestHasValidOrigin, revokeLocalSession, sessionCookie } from "./local-auth";
 import { applyStudentImport, previewStudentImport, readStudentImportBody, StudentImportError } from "./student-import";
@@ -57,6 +58,21 @@ async function handleApi(request: Request, env: Env, url: URL) {
     }
   }
 
+  if (request.method === "POST" && url.pathname === "/api/account-activations/reissue") {
+    if (!requestHasValidOrigin(request)) return json({ error: "Origen de solicitud inválido" }, 403);
+    const user = await authenticateRequest(request, env.DB);
+    if (!user) return json({ error: "Sesión requerida" }, 401);
+    const body = await readJsonBody(request);
+    if (!body) return json({ error: "Solicitud inválida" }, 400);
+    try {
+      return json(await reissueAccountActivation(env.DB, user.id, parseReissuePayload(body)), 201);
+    } catch (error) {
+      if (error instanceof ActivationAdminError) return json({ error: error.message }, error.status);
+      console.error("Fallo interno al reemitir una activación");
+      return json({ error: "No fue posible reemitir la activación" }, 500);
+    }
+  }
+
   if (request.method !== "GET") return json({ error: "Método no permitido" }, 405);
 
   const user = await authenticateRequest(request, env.DB);
@@ -70,6 +86,10 @@ async function handleApi(request: Request, env: Env, url: URL) {
   if (url.pathname === "/api/me/courses") {
     const courses = await listCoursesForUser(env.DB, user.id);
     return json({ courses });
+  }
+
+  if (url.pathname === "/api/account-activations/candidates") {
+    return json(await listActivationCandidates(env.DB, user.id));
   }
 
   return json({ error: "Recurso no encontrado" }, 404);

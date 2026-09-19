@@ -162,6 +162,8 @@ Endpoints actuales:
 | `GET` | `/api/me/courses` | Implementado y protegido |
 | `POST` | `/api/student-imports/preview` | Implementado; requiere sesión, origen válido y autorización sobre el grupo |
 | `POST` | `/api/student-imports/apply` | Implementado; repite las validaciones y aplica el lote transaccionalmente |
+| `GET` | `/api/account-activations/candidates` | Implementado; lista sólo cuentas sin contraseña dentro de grupos autorizados |
+| `POST` | `/api/account-activations/reissue` | Implementado; revoca códigos anteriores, genera uno nuevo y audita grupo y motivo |
 
 La interfaz `/ingresar` permite alternar entre ingreso y primera activación. Cuando existe una sesión, la cabecera muestra el nombre de la persona y un botón para salir.
 
@@ -246,25 +248,9 @@ Falta implementar el circuito transaccional:
 
 ## 8. Estado de la D1 local
 
-Las migraciones `0001` a `0006` están aplicadas localmente. La prueba de integración del importador dejó un único lote y una cuenta adicional, ambos exclusivamente ficticios. No se aplicó el portafolio real de referencia.
+Las migraciones `0001` a `0006` están aplicadas localmente. La semilla aporta dos perfiles, una asignatura y un grupo de demostración; las pruebas de integración agregan una tercera cuenta y lotes, activaciones y eventos de auditoría exclusivamente ficticios. Esas cantidades pueden aumentar al repetir las comprobaciones y no deben tratarse como datos de referencia. Cada recorrido cierra su sesión al terminar.
 
-| Entidad | Cantidad o estado |
-| --- | ---: |
-| Usuarios ficticios | 3 |
-| Sesiones activas | 0 |
-| Credenciales activadas | 1 |
-| Activaciones ficticias disponibles | 2 |
-| Documentos ficticios protegidos | 1 |
-| Importaciones ficticias aplicadas | 1 |
-| Asignaturas | 2 |
-| Grupos | 2 |
-| Actividades | 1 |
-| Preguntas | 12 |
-| Claves privadas de corrección | 12 |
-| Habilitaciones | 1 |
-| Intentos de actividad | 0 |
-| Contenidos versionados | 1 |
-| Publicaciones | 1 |
+También están cargados localmente una actividad con 12 preguntas y sus claves privadas de corrección, una habilitación y un contenido versionado publicado. No existen intentos académicos reales y nunca se aplicó el portafolio real de referencia.
 
 La semilla local incorpora dos perfiles ficticios:
 
@@ -299,13 +285,14 @@ La implementación actual superó las siguientes comprobaciones:
 
 El portafolio real de referencia continúa produciendo una previsualización agregada de 19 filas válidas, cero filas inválidas, cero documentos duplicados y cero colisiones en las bases de usuario. Esa comprobación no imprime nombres ni documentos y no aplica el archivo a D1.
 
-Playwright ejecutó diez comprobaciones en Chromium: acceso sin sesión, restricción por rol, estado inicial del asistente, lectura local del portafolio autorizado y entrega individual ficticia, cada una en escritorio y móvil. La inspección visual de las referencias confirmó que las pantallas son legibles y no desbordan horizontalmente. Las capturas contienen sólo estados e identidades ficticias; la prueba con el portafolio real no genera captura, traza ni video.
+Playwright ejecutó catorce comprobaciones en Chromium: acceso sin sesión, restricción por rol, estado inicial del asistente, lectura local del portafolio autorizado, entrega individual ficticia y reemisión administrativa, en escritorio y móvil según corresponda. La inspección visual de las referencias confirmó que las pantallas son legibles y no desbordan horizontalmente. Las capturas contienen sólo estados e identidades ficticias; la prueba con el portafolio real no genera captura, traza ni video.
+
+La integración local contra D1 reemitió dos códigos sucesivos para una cuenta ficticia, comprobó que el primero fuese rechazado inmediatamente después de la segunda emisión y confirmó que una cuenta con contraseña ya no admite reemisión. La salida de la prueba contiene sólo contadores y estados agregados.
 
 ## 10. Seguridad y privacidad pendientes
 
 Antes de utilizar datos reales se debe completar:
 
-- revocación y reemisión administrativa de códigos de activación perdidos;
 - configuración, custodia y estrategia de rotación de `DOCUMENT_HMAC_KEY`;
 - restablecimiento de contraseña;
 - revocación de todas las sesiones de una cuenta;
@@ -359,7 +346,7 @@ El orden recomendado es el siguiente.
 - Completado: generar códigos de activación aleatorios y guardar solamente sus hashes.
 - Completado: construir la interfaz administrativa de carga, revisión y doble confirmación.
 - Completado: entregar cada acceso mediante copia individual o ficha imprimible y retirar los códigos de la memoria al finalizar.
-- Pendiente: implementar la revocación y reemisión administrativa de una activación perdida.
+- Completado: revocar y reemitir una activación perdida o vencida sólo para cuentas todavía sin contraseña y dentro del alcance docente.
 - Pendiente: implementar la operación administrativa que agrega una nueva cédula a quien estaba registrado con pasaporte, sin crear otra cuenta. El esquema ya permite conservar ambos documentos.
 
 ### Hito 3 — Catálogo autenticado
@@ -395,6 +382,6 @@ El orden recomendado es el siguiente.
 
 ## 13. Próximo trabajo concreto
 
-El próximo frente funcional debe ser implementar la **revocación y reemisión administrativa de códigos de activación** sin exponer su valor anterior. Después corresponde preparar la configuración remota de `DOCUMENT_HMAC_KEY` y convertir “Mis cursos” en una vista autenticada.
+El próximo frente técnico antes de usar datos reales es preparar la configuración remota de `DOCUMENT_HMAC_KEY`. El siguiente frente funcional es convertir **Mis cursos** en una vista autenticada que consuma `/api/me/courses`.
 
-Hasta resolver la reemisión administrativa y configurar el secreto remoto no deben importarse cuentas reales. El portafolio de 2025 se mantiene únicamente como archivo de validación y no está mapeado a ningún grupo de D1.
+Hasta configurar y custodiar el secreto remoto no deben importarse cuentas reales. El portafolio de 2025 se mantiene únicamente como archivo de validación y no está mapeado a ningún grupo de D1.

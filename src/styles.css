@@ -255,7 +255,6 @@ h1 span { color: #978cda; }
 .import-alert.is-error { background: rgba(151, 67, 86, .16); border-color: #855565; color: #f2bac7; }
 .import-alert.is-warning { background: rgba(156, 111, 47, .15); border-color: #765d39; color: #e2c390; }
 .danger-action { background: #765b9f; border-color: #765b9f; }
-.credentials-table code { color: #f0dcae; font-size: 12px; overflow-wrap: anywhere; }
 .delivery-heading { align-items: center; display: flex; justify-content: space-between; margin: 24px 0 10px; }
 .delivery-heading h3 { color: #efedf6; margin: 0; }
 .delivery-heading p { color: #aaa8b4; font-size: 12px; margin: 5px 0 0; }
@@ -276,6 +275,16 @@ h1 span { color: #978cda; }
 .finish-delivery p, .delivery-complete > p:last-child { color: #aaa8b4; font-size: 12px; line-height: 1.6; margin: 0; }
 .finish-delivery .button-primary:disabled { cursor: not-allowed; opacity: .45; }
 .delivery-complete { border-color: #477963; }
+.activation-field { color: #aaa8b4; display: grid; font-size: 11px; font-weight: 750; gap: 7px; letter-spacing: .07em; margin: 14px 0; text-transform: uppercase; }
+.activation-field select { background: #111217; border: 1px solid #4a4958; border-radius: 7px; color: #eceaf2; font: 500 13px/1.4 "Montserrat", sans-serif; max-width: 540px; padding: 10px 12px; text-transform: none; }
+.activation-candidates { display: grid; gap: 8px; margin: 17px 0; }
+.activation-candidate { align-items: flex-start; background: #121318; border: 1px solid #34353f; border-radius: 8px; cursor: pointer; display: flex; gap: 11px; padding: 13px; }
+.activation-candidate.is-selected { background: #211f30; border-color: #71699e; }
+.activation-candidate input { accent-color: #9288d5; margin-top: 4px; }
+.activation-candidate span { display: grid; gap: 4px; }
+.activation-candidate strong { color: #ebe8f2; font-size: 14px; }
+.activation-candidate small { color: #9997a5; font-size: 11px; }
+.reissue-confirmation { border-top: 1px solid #34353f; margin-top: 20px; padding-top: 8px; }
 
 /* Modo claro */
 .theme-light { background: #f7f7fa; color: #24242d; }

@@ -28,6 +28,8 @@ Las cuentas son creadas por personal autorizado. El estudiante recibe un nombre 
 
 El resultado de una importación ofrece fichas individuales para copiar o imprimir un acceso por vez. La ficha omite documentos administrativos, recuerda el vencimiento de 14 días y el cierre de sesión en equipos compartidos. Los códigos se retiran de la pantalla cuando el docente confirma la entrega de todas las fichas; esa confirmación todavía no se registra en D1.
 
+La ruta docente `/docente/activaciones` permite seleccionar únicamente cuentas todavía sin contraseña dentro de grupos autorizados. La reemisión exige confirmar identidad y motivo, revoca todos los códigos anteriores, crea uno nuevo por 14 días y registra la acción en auditoría sin conservar el código en claro. Una cuenta ya activada queda fuera de este flujo y requiere restablecimiento de contraseña.
+
 Las contraseñas se derivan con PBKDF2-HMAC-SHA-256, sal aleatoria por cuenta y 600.000 iteraciones. Después de cinco fallos la credencial se bloquea durante 15 minutos. Las respuestas de error no distinguen entre usuario, código o contraseña incorrectos.
 
 ## Sesiones
@@ -42,7 +44,6 @@ Las contraseñas se derivan con PBKDF2-HMAC-SHA-256, sal aleatoria por cuenta y 
 ## Pendiente antes de usar datos reales
 
 - Definir custodia y rotación del secreto HMAC.
-- Implementar revocación y reemisión administrativa de códigos perdidos.
 - Implementar restablecimiento de contraseña por docente o administrador.
 - Revisar los plazos de sesión con la dinámica real del aula.
 - Añadir limitación de frecuencia por origen además del bloqueo por cuenta.

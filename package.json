@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --configLoader runner",
     "build": "tsc -b && vite build --configLoader runner",
-    "test": "node --test tests/auth-crypto.test.ts tests/student-import.test.ts tests/student-portfolio.test.mjs tests/activation-delivery.test.ts",
+    "test": "node --test tests/auth-crypto.test.ts tests/student-import.test.ts tests/student-portfolio.test.mjs tests/activation-delivery.test.ts tests/account-activation-admin.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:update": "playwright test --update-snapshots",
     "preview": "vite preview",

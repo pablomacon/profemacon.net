@@ -78,4 +78,4 @@ Las pruebas de navegador usan Chromium mediante Playwright y recorren el importa
 
 ## Próximas etapas
 
-Implementar la reemisión administrativa de activaciones perdidas, conectar `Mis cursos` con el catálogo autorizado, habilitar la entrega de actividades y ampliar los paneles docente y de practicante.
+Configurar el secreto documental remoto, conectar `Mis cursos` con el catálogo autorizado, implementar el restablecimiento administrativo de contraseñas y ampliar los paneles docente y de practicante.

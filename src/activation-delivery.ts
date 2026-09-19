@@ -1,5 +1,4 @@
 export type ActivationCredential = {
-  sourceRow: number;
   displayName: string;
   username: string;
   activationCode: string;

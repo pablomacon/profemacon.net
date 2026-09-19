@@ -1,6 +1,6 @@
 # Importación administrativa de estudiantes
 
-Estado: lector compartido, validación, interfaz administrativa, previsualización autorizada, aplicación transaccional a D1 y entrega individual de activaciones implementados. La configuración del entorno real y la reemisión administrativa de códigos continúan pendientes.
+Estado: lector compartido, validación, interfaz administrativa, previsualización autorizada, aplicación transaccional a D1, entrega individual y reemisión administrativa de activaciones implementados. La configuración del entorno real continúa pendiente.
 
 ## Formato de origen confirmado
 
@@ -94,13 +94,12 @@ Playwright comprueba el acceso sin sesión, la restricción para estudiantes, el
 
 Después de aplicar un lote, cada activación se presenta como una ficha individual. El docente puede copiar solamente ese acceso o abrir una versión imprimible que no incluye documento, cédula ni pasaporte. Cada ficha debe marcarse como entregada antes de habilitar **Finalizar y borrar códigos**. Esa confirmación sirve para ordenar la operación actual y no se persiste como prueba de entrega. No existe descarga masiva ni integración con servicios externos.
 
-Mientras haya códigos en claro la pantalla advierte antes de cerrar o recargar. Si se abandona la vista, los valores no pueden recuperarse porque D1 conserva sólo sus hashes. Antes del piloto debe existir una operación administrativa separada para revocar y reemitir una activación perdida.
+Mientras haya códigos en claro la pantalla advierte antes de cerrar o recargar. Si se abandona la vista, los valores no pueden recuperarse porque D1 conserva sólo sus hashes. La ruta `/docente/activaciones` permite revocar y reemitir un acceso para una cuenta todavía sin contraseña. El servidor vuelve a comprobar que el estudiante pertenece a un grupo administrado por el actor y registra grupo y motivo en auditoría.
 
 El entorno local usa `.dev.vars`, ignorado por Git. `.dev.vars.example` documenta únicamente el nombre de la variable y nunca debe contener una clave real.
 
 ## Trabajo pendiente
 
 - configurar y custodiar `DOCUMENT_HMAC_KEY` en el entorno remoto;
-- implementar la revocación y reemisión administrativa de una activación perdida;
 - decidir si el piloto necesita registrar en auditoría la fecha y el medio de entrega, sin guardar el código;
 - agregar una prueba de navegador del flujo completo contra una D1 descartable usando exclusivamente datos ficticios.
