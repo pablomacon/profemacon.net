@@ -42,19 +42,20 @@ El desarrollo utiliza únicamente una D1 local guardada bajo `.wrangler/`. `wran
 
 ## 3. Estado del repositorio
 
-La rama activa es `main`. Al comenzar esta revisión el árbol de trabajo estaba limpio; esta actualización deja únicamente el presente documento modificado. Los tres últimos bloques funcionales fueron consolidados en commits locales:
+La rama activa es `main`. Los checkpoints anteriores fueron enviados a `origin/main` antes de comenzar la interfaz del importador:
 
 - `caaefa1`: Unidad 1 y autenticación propia;
 - `8ddb60f`: validación segura de portafolios;
 - `667ae7a`: importación segura de estudiantes.
+- `7ed3c6a`: actualización del estado interno.
 
-La rama local está tres commits por delante de `origin/main`. Esos checkpoints todavía no fueron enviados al remoto.
+El bloque de interfaz, lector compartido y prueba de integración quedó consolidado en un nuevo checkpoint funcional.
 
 Antes de abrir otro frente importante conviene comprobar:
 
 1. que el árbol de trabajo no contenga modificaciones inesperadas;
 2. que las pruebas y la compilación continúen pasando;
-3. que los tres checkpoints locales estén respaldados en el remoto antes de incorporar datos o cambios difíciles de reproducir.
+3. que cada checkpoint funcional esté respaldado en el remoto antes de incorporar datos o cambios difíciles de reproducir.
 
 No deben descartarse ni sobrescribirse cambios locales mediante `git reset --hard` o procedimientos equivalentes.
 
@@ -243,14 +244,16 @@ Falta implementar el circuito transaccional:
 
 ## 8. Estado de la D1 local
 
-Las migraciones `0001` a `0006` están aplicadas localmente. Después de las pruebas y su limpieza, el estado relevante incluye un único mapeo de grupo ficticio y cero importaciones aplicadas.
+Las migraciones `0001` a `0006` están aplicadas localmente. La prueba de integración del importador dejó un único lote y una cuenta adicional, ambos exclusivamente ficticios. No se aplicó el portafolio real de referencia.
 
 | Entidad | Cantidad o estado |
 | --- | ---: |
-| Usuarios ficticios | 2 |
+| Usuarios ficticios | 3 |
 | Sesiones activas | 0 |
-| Credenciales activadas | 0 |
+| Credenciales activadas | 1 |
 | Activaciones ficticias disponibles | 2 |
+| Documentos ficticios protegidos | 1 |
+| Importaciones ficticias aplicadas | 1 |
 | Asignaturas | 2 |
 | Grupos | 2 |
 | Actividades | 1 |
@@ -289,7 +292,8 @@ La implementación actual superó las siguientes comprobaciones:
 - ausencia de sesiones activas al terminar las pruebas;
 - `git diff --check` sin errores de espacios;
 - 11 pruebas automatizadas aprobadas, incluidas normalización, HMAC documental, nombres de usuario y validación del lote;
-- build de producción aprobado con los endpoints de previsualización y aplicación.
+- build de producción aprobado con los endpoints de previsualización y aplicación;
+- recorrido HTTP ficticio aprobado: autenticación docente, previsualización, aplicación, devolución única de activación, rechazo del lote repetido y cierre de sesión.
 
 El portafolio real de referencia continúa produciendo una previsualización agregada de 19 filas válidas, cero filas inválidas, cero documentos duplicados y cero colisiones en las bases de usuario. Esa comprobación no imprime nombres ni documentos y no aplica el archivo a D1.
 
@@ -299,7 +303,6 @@ No fue posible realizar la inspección visual automatizada porque esta sesión d
 
 Antes de utilizar datos reales se debe completar:
 
-- interfaz administrativa para el importador de cuentas;
 - descarga y entrega privada de códigos de activación;
 - configuración, custodia y estrategia de rotación de `DOCUMENT_HMAC_KEY`;
 - restablecimiento de contraseña;
@@ -323,7 +326,7 @@ No se deben introducir datos personales reales en semillas, fixtures, Markdown, 
 - Los contenidos no están filtrados por publicación/grupo.
 - El corrector de actividades está desconectado.
 - No hay flujo de restablecimiento de contraseña.
-- El importador tiene API segura, pero todavía no tiene pantalla administrativa.
+- El importador tiene API y pantalla administrativa; falta una revisión visual manual porque no hubo navegador conectado durante la comprobación automatizada.
 - No hay panel docente ni de practicante funcional.
 - Hay pruebas automatizadas para criptografía, lectura del portafolio y preparación del lote, pero todavía no existe un script de lint ni pruebas de integración completas para los endpoints del importador.
 - Mermaid genera fragmentos grandes durante el build; es una advertencia de rendimiento, no un error funcional.
@@ -353,7 +356,7 @@ El orden recomendado es el siguiente.
 - Completado: detectar duplicados, colisiones y posibles cuentas existentes.
 - Completado: aplicar usuarios, roles, documentos, inscripciones, activaciones y auditoría mediante un lote transaccional.
 - Completado: generar códigos de activación aleatorios y guardar solamente sus hashes.
-- Pendiente: construir la interfaz administrativa de carga, revisión y doble confirmación.
+- Completado: construir la interfaz administrativa de carga, revisión y doble confirmación.
 - Pendiente: producir una salida privada para entregar individualmente los accesos.
 - Pendiente: implementar la operación administrativa que agrega una nueva cédula a quien estaba registrado con pasaporte, sin crear otra cuenta. El esquema ya permite conservar ambos documentos.
 
@@ -390,6 +393,6 @@ El orden recomendado es el siguiente.
 
 ## 13. Próximo trabajo concreto
 
-El próximo frente funcional debe ser la **interfaz administrativa del importador**. Debe ejecutar el lector, permitir confirmar tipo y país de los documentos, mostrar la previsualización y exigir una confirmación separada antes de aplicar.
+El próximo frente funcional debe ser definir el **mecanismo privado de entrega de códigos de activación** y documentar su ciclo de vida. Después corresponde preparar la configuración remota de `DOCUMENT_HMAC_KEY` y convertir “Mis cursos” en una vista autenticada.
 
-La decisión aún abierta es el mecanismo privado de entrega de códigos de activación. Hasta resolverlo, configurar `DOCUMENT_HMAC_KEY` y completar las pruebas de integración no deben importarse cuentas reales. El portafolio de 2025 se mantiene únicamente como archivo de validación y no está mapeado a ningún grupo de D1.
+Hasta resolver la entrega, configurar el secreto remoto y realizar la revisión visual no deben importarse cuentas reales. El portafolio de 2025 se mantiene únicamente como archivo de validación y no está mapeado a ningún grupo de D1.

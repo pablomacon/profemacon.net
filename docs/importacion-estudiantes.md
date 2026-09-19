@@ -1,6 +1,6 @@
 # Importación administrativa de estudiantes
 
-Estado: lector, validación, previsualización autorizada y aplicación transaccional a D1 implementados; interfaz administrativa pendiente.
+Estado: lector compartido, validación, interfaz administrativa, previsualización autorizada y aplicación transaccional a D1 implementados. La entrega privada de activaciones y la configuración del entorno real continúan pendientes.
 
 ## Formato de origen confirmado
 
@@ -88,9 +88,13 @@ La tabla `mapeos_grupo_origen`, creada por la migración `0006`, evita que el no
 
 El Worker requiere el secreto `DOCUMENT_HMAC_KEY`, de al menos 32 caracteres, configurado fuera del repositorio. Sin él los endpoints responden con indisponibilidad y no procesan documentos.
 
+La ruta `/docente/importar-estudiantes` implementa el asistente de cuatro etapas. El lector funciona tanto desde el navegador como desde el comando de consola mediante un único núcleo compartido. Después de una aplicación correcta, la interfaz descarta de memoria el portafolio y los documentos normalizados; conserva solamente el resultado y los códigos efímeros mientras la pantalla permanezca abierta.
+
+El entorno local usa `.dev.vars`, ignorado por Git. `.dev.vars.example` documenta únicamente el nombre de la variable y nunca debe contener una clave real.
+
 ## Trabajo pendiente
 
-- construir la pantalla administrativa que carga el XLSX, permite confirmar documentos y llama primero a la previsualización;
 - definir un mecanismo privado para descargar o entregar individualmente los códigos mostrados una sola vez;
-- probar el circuito completo con un lote pequeño ficticio antes de cargar estudiantes reales;
-- configurar y custodiar `DOCUMENT_HMAC_KEY` en cada entorno.
+- realizar una revisión visual manual de la interfaz en escritorio y móvil;
+- configurar y custodiar `DOCUMENT_HMAC_KEY` en el entorno remoto;
+- agregar pruebas de navegador cuando exista un navegador automatizado disponible.

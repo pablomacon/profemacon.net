@@ -1,0 +1,3 @@
+# Copiar como .dev.vars y reemplazar por una clave local de al menos 32 caracteres.
+# Nunca reutilizar esta clave en un entorno remoto o con datos reales.
+DOCUMENT_HMAC_KEY="REEMPLAZAR"

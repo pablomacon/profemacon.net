@@ -12,7 +12,8 @@
     "db:migrate:local": "wrangler d1 migrations apply profemacon-beta-local --local",
     "db:seed:local": "wrangler d1 execute profemacon-beta-local --local --file=seed/001-datos-ficticios.sql",
     "db:seed:variables-pilot:local": "wrangler d1 execute profemacon-beta-local --local --file=seed/actividades/programacion-i/unidad-1/variables-java-01.public.sql",
-    "students:preview": "node scripts/preview-student-portfolio.mjs"
+    "students:preview": "node scripts/preview-student-portfolio.mjs",
+    "students:verify-api": "node scripts/verify-student-import-api.mjs"
   },
   "dependencies": {
     "fast-xml-parser": "^5.11.1",

@@ -310,7 +310,13 @@ export async function applyStudentImport(db: D1Database, userId: number, secret:
     }
   }
 
-  const auditData = JSON.stringify({ groupId: plan.group.groupId, newAccounts: activationByRow.size, existingAccounts: plan.students.length - activationByRow.size, fileSha256: payload.source.fileSha256 });
+  const auditData = JSON.stringify({
+    groupId: plan.group.groupId,
+    newAccounts: plan.students.filter((student) => !student.existing).length,
+    existingAccounts: plan.students.filter((student) => student.existing).length,
+    activationCodes: activationByRow.size,
+    fileSha256: payload.source.fileSha256,
+  });
   statements.push(db.prepare(`
     INSERT INTO eventos_auditoria (actor_usuario_id, accion, entidad_tipo, entidad_id, datos_json)
     VALUES (?1, 'importacion_estudiantes_aplicada', 'importacion_estudiantes', ?2, ?3)

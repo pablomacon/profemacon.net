@@ -74,4 +74,4 @@ npm run build
 
 ## Próximas etapas
 
-Construir la interfaz del importador administrativo ya respaldado por el Worker, conectar `Mis cursos` con el catálogo autorizado, habilitar la entrega de actividades y construir los paneles docente y de practicante.
+Definir la entrega privada de códigos de activación, conectar `Mis cursos` con el catálogo autorizado, habilitar la entrega de actividades y ampliar los paneles docente y de practicante.
