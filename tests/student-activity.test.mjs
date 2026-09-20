@@ -430,12 +430,29 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
   assert.equal(typeof firstAttempt.body.attempt.createdAt, "string");
   assert.equal(firstAttempt.body.access.groupCode, "grupo-a");
   assert.equal(JSON.stringify(firstAttempt.body).includes("clave_correccion_json"), false);
+  assert.equal(JSON.stringify(firstAttempt.body).includes("clave_correccion_snapshot_json"), false);
   const savedFirst = await putAnswer("actividad-publica", firstAttempt.body.attempt.id, 1, { groupCode: "grupo-a", answer: "primera versión" });
   assert.equal(savedFirst.response.status, 200);
   assert.deepEqual(savedFirst.body, { attempt: { id: firstAttempt.body.attempt.id, state: "en_progreso" }, question: { number: 1, type: "radio" }, saved: true });
   assert.equal(JSON.stringify(savedFirst.body).includes("clave_correccion_json"), false);
   const updatedFirst = await putAnswer("actividad-publica", firstAttempt.body.attempt.id, 1, { groupCode: "grupo-a", answer: "segunda versión" });
   assert.equal(updatedFirst.response.status, 200);
+  const snapshotBeforeMutation = new DatabaseSync(databasePath);
+  const storedSnapshot = snapshotBeforeMutation.prepare(`
+    SELECT enunciado_snapshot AS prompt, puntaje_maximo AS points, clave_correccion_snapshot_json AS key
+    FROM preguntas_intento_actividad WHERE intento_id = ?1 AND numero_pregunta = 1
+  `).get(firstAttempt.body.attempt.id);
+  assert.equal(storedSnapshot.prompt, "Pregunta pública");
+  assert.equal(storedSnapshot.points, 1);
+  assert.equal(storedSnapshot.key, '["b"]');
+  snapshotBeforeMutation.exec(`
+    UPDATE preguntas_actividad
+    SET enunciado = 'Pregunta original modificada', puntaje = 99, clave_correccion_json = '["c"]'
+    WHERE id = 1
+  `);
+  snapshotBeforeMutation.close();
+  const savedAfterOriginalMutation = await putAnswer("actividad-publica", firstAttempt.body.attempt.id, 1, { groupCode: "grupo-a", answer: "sigue usando snapshot" });
+  assert.equal(savedAfterOriginalMutation.response.status, 200);
   const wrongQuestion = await putAnswer("actividad-publica", firstAttempt.body.attempt.id, 2, { groupCode: "grupo-a", answer: "ajena" });
   assert.equal(wrongQuestion.response.status, 404);
   assert.equal(wrongQuestion.body.code, "QUESTION_NOT_FOUND");
@@ -460,22 +477,28 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
     SELECT respuesta_dada_json AS answer, respuesta_normalizada_json AS normalized, correcta AS correct, puntaje_obtenido AS score
     FROM respuestas_intento_actividad WHERE intento_id = ?1 AND pregunta_id = 1
   `).get(firstAttempt.body.attempt.id);
-  assert.equal(savedRaw.answer, '"segunda versión"');
-  assert.equal(savedRaw.normalized, '"segunda versión"');
+  assert.equal(savedRaw.answer, '"sigue usando snapshot"');
+  assert.equal(savedRaw.normalized, '"sigue usando snapshot"');
   assert.equal(savedRaw.correct, 0);
   assert.equal(savedRaw.score, 0);
   persistedAttempt.close();
 
   const multiAttempt = await postAttempt("actividad-respuestas", { submissionId: "respuestas-multiples" });
   assert.equal(multiAttempt.response.status, 201);
+  const snapshotAtCreation = new DatabaseSync(databasePath);
+  const initialSnapshotRows = snapshotAtCreation.prepare("SELECT COUNT(*) AS total FROM preguntas_intento_actividad WHERE intento_id = ?1").get(multiAttempt.body.attempt.id);
+  snapshotAtCreation.close();
+  assert.equal(initialSnapshotRows.total, 2, "incluye preguntas todavía no respondidas");
   const savedMultiFirst = await putAnswer("actividad-respuestas", multiAttempt.body.attempt.id, 1, { answer: "uno" });
   const savedMultiSecond = await putAnswer("actividad-respuestas", multiAttempt.body.attempt.id, 2, { answer: ["dos", "tres"] });
   assert.equal(savedMultiFirst.response.status, 200);
   assert.equal(savedMultiSecond.response.status, 200);
   const persistedMultiple = new DatabaseSync(databasePath);
   const multipleRows = persistedMultiple.prepare("SELECT COUNT(*) AS total FROM respuestas_intento_actividad WHERE intento_id = ?1").get(multiAttempt.body.attempt.id);
+  const multiSnapshot = persistedMultiple.prepare("SELECT COUNT(*) AS total FROM preguntas_intento_actividad WHERE intento_id = ?1").get(multiAttempt.body.attempt.id);
   persistedMultiple.close();
   assert.equal(multipleRows.total, 2);
+  assert.equal(multiSnapshot.total, 2);
   const sentAnswer = await putAnswer("actividad-agotada", sentAttemptId, 1, { answer: "bloqueada" });
   assert.equal(sentAnswer.response.status, 409);
   assert.equal(sentAnswer.body.code, "ATTEMPT_NOT_EDITABLE");
@@ -486,6 +509,10 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
   const repeatedAttempt = await postAttempt("actividad-publica", { groupCode: "grupo-a", submissionId: "inicio-uno" });
   assert.equal(repeatedAttempt.response.status, 201);
   assert.equal(repeatedAttempt.body.attempt.id, firstAttempt.body.attempt.id);
+  const idempotentSnapshotCheck = new DatabaseSync(databasePath);
+  const repeatedSnapshotRows = idempotentSnapshotCheck.prepare("SELECT COUNT(*) AS total FROM preguntas_intento_actividad WHERE intento_id = ?1").get(firstAttempt.body.attempt.id);
+  idempotentSnapshotCheck.close();
+  assert.equal(repeatedSnapshotRows.total, 1, "un retry idempotente no duplica snapshots");
 
   const beforeClose = await postAttempt("actividad-reintento-cierre", { submissionId: "reintento-cierre" });
   assert.equal(beforeClose.response.status, 201);

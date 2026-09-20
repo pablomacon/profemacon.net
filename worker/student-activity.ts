@@ -469,12 +469,16 @@ export async function saveStudentActivityAnswer(
   }
 
   const question = await db.prepare(`
-    SELECT p.id, p.numero AS number, p.tipo AS type, p.enunciado AS prompt
-    FROM preguntas_actividad p
-    WHERE p.actividad_id = ?1 AND p.numero = ?2
+    SELECT
+      p.pregunta_origen_id AS id,
+      p.numero_pregunta AS number,
+      p.tipo_pregunta AS type,
+      p.enunciado_snapshot AS prompt
+    FROM preguntas_intento_actividad p
+    WHERE p.intento_id = ?1 AND p.numero_pregunta = ?2
     LIMIT 1
-  `).bind(activity.id, questionNumber).first<ActivityQuestionRow>();
-  if (!question) throw new StudentActivityError(404, "QUESTION_NOT_FOUND", "La pregunta no pertenece a esta actividad.");
+  `).bind(attempt.id, questionNumber).first<ActivityQuestionRow>();
+  if (!question) throw new StudentActivityError(404, "QUESTION_NOT_FOUND", "La pregunta no pertenece al snapshot de este intento.");
 
   try {
     await db.prepare(`
