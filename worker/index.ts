@@ -3,6 +3,7 @@ import { ActivationAdminError, listActivationCandidates, parseReissuePayload, re
 import { listCoursesForUser } from "./course-catalog";
 import { activateLocalAccount, clearSessionCookie, loginLocalAccount, readJsonBody, requestHasValidOrigin, revokeLocalSession, sessionCookie } from "./local-auth";
 import { applyStudentImport, previewStudentImport, readStudentImportBody, StudentImportError } from "./student-import";
+import { createOrRecoverStudentActivityAttempt, getStudentActivity, StudentActivityError } from "./student-activity";
 
 export interface Env {
   DB: D1Database;
@@ -73,7 +74,61 @@ async function handleApi(request: Request, env: Env, url: URL) {
     }
   }
 
+  const attemptMatch = /^\/api\/me\/activities\/([^/]+)\/attempts$/.exec(url.pathname);
+  if (request.method === "POST" && attemptMatch) {
+    if (!requestHasValidOrigin(request)) return json({ error: "Origen de solicitud inválido" }, 403);
+    const user = await authenticateRequest(request, env.DB);
+    if (!user) return json({ code: "SESSION_REQUIRED", error: "Sesión requerida" }, 401);
+    const body = await readJsonBody(request);
+    if (!body || (body.groupCode !== undefined && typeof body.groupCode !== "string")) {
+      return json({ code: "INVALID_REQUEST", error: "La solicitud debe incluir JSON válido." }, 400);
+    }
+    let slug: string;
+    try {
+      slug = decodeURIComponent(attemptMatch[1]);
+    } catch {
+      return json({ code: "ACTIVITY_NOT_FOUND", error: "La actividad no fue encontrada" }, 404);
+    }
+    try {
+      const result = await createOrRecoverStudentActivityAttempt(
+        env.DB,
+        user.id,
+        slug,
+        typeof body.groupCode === "string" ? body.groupCode : null,
+        body.submissionId,
+      );
+      return json(result, 201);
+    } catch (error) {
+      if (error instanceof StudentActivityError) return json({ code: error.code, error: error.message }, error.status);
+      console.error("Fallo interno al crear o recuperar un intento estudiantil");
+      return json({ code: "INTERNAL_ERROR", error: "No fue posible preparar el intento" }, 500);
+    }
+  }
+
   if (request.method !== "GET") return json({ error: "Método no permitido" }, 405);
+
+  const activityMatch = /^\/api\/me\/activities\/([^/]+)$/.exec(url.pathname);
+  if (activityMatch) {
+    const user = await authenticateRequest(request, env.DB);
+    if (!user) return json({ code: "SESSION_REQUIRED", error: "Sesión requerida" }, 401);
+    let slug: string;
+    try {
+      slug = decodeURIComponent(activityMatch[1]);
+    } catch {
+      return json({ code: "ACTIVITY_NOT_FOUND", error: "La actividad no fue encontrada" }, 404);
+    }
+    try {
+      return json(await getStudentActivity(env.DB, user.id, slug, url.searchParams.get("groupCode")));
+    } catch (error) {
+      if (error instanceof StudentActivityError) {
+        const body: Record<string, unknown> = { code: error.code, error: error.message };
+        if (error.groups) body.groups = error.groups;
+        return json(body, error.status);
+      }
+      console.error("Fallo interno al consultar una actividad estudiantil");
+      return json({ code: "INTERNAL_ERROR", error: "No fue posible consultar la actividad" }, 500);
+    }
+  }
 
   const user = await authenticateRequest(request, env.DB);
   if (!user) return json({ error: "Sesión requerida" }, 401);
