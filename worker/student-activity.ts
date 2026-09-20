@@ -56,7 +56,11 @@ export class StudentActivityError extends Error {
       | "NO_ATTEMPTS_AVAILABLE"
       | "INVALID_SUBMISSION_ID"
       | "IDEMPOTENCY_CONFLICT"
-      | "ACTIVITY_UNAVAILABLE",
+      | "ACTIVITY_UNAVAILABLE"
+      | "ATTEMPT_NOT_FOUND"
+      | "ATTEMPT_NOT_EDITABLE"
+      | "QUESTION_NOT_FOUND"
+      | "INVALID_ANSWER",
     message: string,
     public readonly groups?: Array<{ code: string; name: string }>,
   ) {
@@ -72,6 +76,13 @@ type AttemptRow = {
   ordinal: number | null;
   submissionId: string;
   createdAt: string;
+};
+
+type ActivityQuestionRow = {
+  id: number;
+  number: number;
+  type: "radio" | "checkbox" | "text" | "ordenar" | "relacionar";
+  prompt: string;
 };
 
 function jsonArray(value: string): unknown[] {
@@ -402,4 +413,95 @@ export async function createOrRecoverStudentActivityAttempt(
     throw new StudentActivityError(409, "IDEMPOTENCY_CONFLICT", "No fue posible recuperar el intento creado.");
   }
   return publicAttempt(created, access);
+}
+
+function validateAttemptId(value: unknown): number {
+  const attemptId = typeof value === "string" && /^\d+$/.test(value) ? Number(value) : NaN;
+  if (!Number.isSafeInteger(attemptId) || attemptId <= 0) {
+    throw new StudentActivityError(404, "ATTEMPT_NOT_FOUND", "El intento no fue encontrado.");
+  }
+  return attemptId;
+}
+
+function validateQuestionNumber(value: unknown): number {
+  const questionNumber = typeof value === "string" && /^\d+$/.test(value) ? Number(value) : NaN;
+  if (!Number.isSafeInteger(questionNumber) || questionNumber <= 0) {
+    throw new StudentActivityError(404, "QUESTION_NOT_FOUND", "La pregunta no fue encontrada.");
+  }
+  return questionNumber;
+}
+
+function answerJson(value: unknown): string {
+  try {
+    const serialized = JSON.stringify(value);
+    if (serialized === undefined) throw new Error();
+    return serialized;
+  } catch {
+    throw new StudentActivityError(400, "INVALID_ANSWER", "La respuesta debe ser un valor JSON válido.");
+  }
+}
+
+export async function saveStudentActivityAnswer(
+  db: D1Database,
+  userId: number,
+  slug: string,
+  groupCode: string | null,
+  attemptValue: unknown,
+  questionValue: unknown,
+  answer: unknown,
+) {
+  const attemptId = validateAttemptId(attemptValue);
+  const questionNumber = validateQuestionNumber(questionValue);
+  const serializedAnswer = answerJson(answer);
+  const { activity, access } = await resolveStudentActivityAccess(db, userId, slug, groupCode);
+  const attempt = await db.prepare(`
+    SELECT i.id, i.estado AS state
+    FROM intentos_actividad i
+    WHERE i.id = ?1
+      AND i.usuario_id = ?2
+      AND i.actividad_id = ?3
+      AND i.habilitacion_id = ?4
+    LIMIT 1
+  `).bind(attemptId, userId, activity.id, access.habilitationId).first<{ id: number; state: AttemptRow["state"] }>();
+  if (!attempt) throw new StudentActivityError(404, "ATTEMPT_NOT_FOUND", "El intento no fue encontrado.");
+  if (attempt.state !== "en_progreso") {
+    throw new StudentActivityError(409, "ATTEMPT_NOT_EDITABLE", "El intento ya no admite cambios.");
+  }
+
+  const question = await db.prepare(`
+    SELECT p.id, p.numero AS number, p.tipo AS type, p.enunciado AS prompt
+    FROM preguntas_actividad p
+    WHERE p.actividad_id = ?1 AND p.numero = ?2
+    LIMIT 1
+  `).bind(activity.id, questionNumber).first<ActivityQuestionRow>();
+  if (!question) throw new StudentActivityError(404, "QUESTION_NOT_FOUND", "La pregunta no pertenece a esta actividad.");
+
+  try {
+    await db.prepare(`
+      INSERT INTO respuestas_intento_actividad (
+        intento_id, pregunta_id, numero_pregunta, tipo_pregunta, enunciado_snapshot,
+        respuesta_dada_json, respuesta_normalizada_json, correcta, puntaje_obtenido
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6, 0, 0)
+      ON CONFLICT(intento_id, pregunta_id) DO UPDATE SET
+        numero_pregunta = excluded.numero_pregunta,
+        tipo_pregunta = excluded.tipo_pregunta,
+        enunciado_snapshot = excluded.enunciado_snapshot,
+        respuesta_dada_json = excluded.respuesta_dada_json,
+        respuesta_normalizada_json = excluded.respuesta_normalizada_json,
+        correcta = 0,
+        puntaje_obtenido = 0
+    `).bind(attempt.id, question.id, question.number, question.type, question.prompt, serializedAnswer).run();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message.includes("intento cerrado")) {
+      throw new StudentActivityError(409, "ATTEMPT_NOT_EDITABLE", "El intento ya no admite cambios.");
+    }
+    throw error;
+  }
+
+  return {
+    attempt: { id: attempt.id, state: attempt.state },
+    question: { number: question.number, type: question.type },
+    saved: true,
+  };
 }

@@ -145,7 +145,8 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
       (14, 'actividad-cierre-exacto', 1, 'unidad-1', 'tema', 14, 'Cierre exacto', '', 'activa', 1, 1),
       (15, 'actividad-aislada', 1, 'unidad-1', 'tema', 15, 'Actividad aislada', '', 'activa', 1, 1),
       (16, 'actividad-reintento-cierre', 1, 'unidad-1', 'tema', 16, 'Reintento tras cierre', '', 'activa', 1, 2),
-      (17, 'actividad-reintento-deshabilitada', 1, 'unidad-1', 'tema', 17, 'Reintento tras deshabilitar', '', 'activa', 1, 2);
+      (17, 'actividad-reintento-deshabilitada', 1, 'unidad-1', 'tema', 17, 'Reintento tras deshabilitar', '', 'activa', 1, 2),
+      (18, 'actividad-respuestas', 1, 'unidad-1', 'tema', 18, 'Actividad de respuestas', '', 'activa', 2, 1);
     INSERT INTO habilitaciones_actividad
       (id, actividad_id, grupo_id, habilitada, disponible_desde, disponible_hasta)
     VALUES
@@ -157,7 +158,7 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
       (12, 10, 1, 0, '2099-01-01T00:00:00Z', NULL), (13, 11, 1, 1, NULL, NULL),
       (14, 12, 1, 1, NULL, NULL), (15, 13, 1, 1, datetime('now'), NULL),
       (16, 14, 1, 1, NULL, datetime('now')), (17, 15, 1, 1, NULL, NULL),
-      (18, 16, 1, 1, NULL, NULL), (19, 17, 1, 1, NULL, NULL);
+      (18, 16, 1, 1, NULL, NULL), (19, 17, 1, 1, NULL, NULL), (20, 18, 1, 1, NULL, NULL);
     INSERT INTO preguntas_actividad
       (id, actividad_id, numero, tipo, enunciado, instrucciones, opciones_json, recursos_json, placeholder, puntaje, clave_correccion_json, retroalimentacion_correcta, retroalimentacion_incorrecta)
     VALUES
@@ -168,7 +169,9 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
       (5, 9, 2, 'radio', 'Pregunta de 1 punto', '', '[]', '[]', NULL, 1, '["x"]', '', ''),
       (6, 9, 3, 'radio', 'Pregunta de 50 puntos', '', '[]', '[]', NULL, 50, '["x"]', '', ''),
       (7, 11, 1, 'radio', 'Pregunta deshabilitada agotada', '', '[]', '[]', NULL, 1, '["x"]', '', ''),
-      (8, 12, 1, 'radio', 'Pregunta futura agotada', '', '[]', '[]', NULL, 1, '["x"]', '', '');
+      (8, 12, 1, 'radio', 'Pregunta futura agotada', '', '[]', '[]', NULL, 1, '["x"]', '', ''),
+      (9, 18, 1, 'radio', 'Primera respuesta', '', '[]', '[]', NULL, 1, '["x"]', '', ''),
+      (10, 18, 2, 'text', 'Segunda respuesta', '', '[]', '[]', NULL, 1, '["x"]', '', '');
   `);
   const sentAttemptId = insertAttempt(database, 6, 8, 1, 1, 1, "agotada-uno");
   database.exec(`
@@ -219,6 +222,7 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
   const studentToken = await createSession(database, 1);
   const teacherToken = await createSession(database, 2);
   const noGroupToken = await createSession(database, 3);
+  const otherStudentToken = await createSession(database, 4);
   database.close();
   database = undefined;
   const port = await availablePort();
@@ -255,6 +259,18 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
   const postAttempt = async (slug, body, token = studentToken) => {
     const response = await fetch(`${baseUrl}/api/me/activities/${slug}/attempts`, {
       method: "POST",
+      headers: {
+        Cookie: `pm_session=${token}`,
+        Origin: baseUrl,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    return { response, body: await response.json() };
+  };
+  const putAnswer = async (slug, attemptId, questionNumber, body, token = studentToken) => {
+    const response = await fetch(`${baseUrl}/api/me/activities/${slug}/attempts/${attemptId}/responses/${questionNumber}`, {
+      method: "PUT",
       headers: {
         Cookie: `pm_session=${token}`,
         Origin: baseUrl,
@@ -414,15 +430,58 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
   assert.equal(typeof firstAttempt.body.attempt.createdAt, "string");
   assert.equal(firstAttempt.body.access.groupCode, "grupo-a");
   assert.equal(JSON.stringify(firstAttempt.body).includes("clave_correccion_json"), false);
+  const savedFirst = await putAnswer("actividad-publica", firstAttempt.body.attempt.id, 1, { groupCode: "grupo-a", answer: "primera versión" });
+  assert.equal(savedFirst.response.status, 200);
+  assert.deepEqual(savedFirst.body, { attempt: { id: firstAttempt.body.attempt.id, state: "en_progreso" }, question: { number: 1, type: "radio" }, saved: true });
+  assert.equal(JSON.stringify(savedFirst.body).includes("clave_correccion_json"), false);
+  const updatedFirst = await putAnswer("actividad-publica", firstAttempt.body.attempt.id, 1, { groupCode: "grupo-a", answer: "segunda versión" });
+  assert.equal(updatedFirst.response.status, 200);
+  const wrongQuestion = await putAnswer("actividad-publica", firstAttempt.body.attempt.id, 2, { groupCode: "grupo-a", answer: "ajena" });
+  assert.equal(wrongQuestion.response.status, 404);
+  assert.equal(wrongQuestion.body.code, "QUESTION_NOT_FOUND");
+  const otherGroupAttempt = await putAnswer("actividad-publica", firstAttempt.body.attempt.id, 1, { groupCode: "grupo-b", answer: "ajena" });
+  assert.equal(otherGroupAttempt.response.status, 404);
+  assert.equal(otherGroupAttempt.body.code, "ATTEMPT_NOT_FOUND");
+  const otherActivityAttempt = await putAnswer("actividad-en-progreso", firstAttempt.body.attempt.id, 1, { answer: "ajena" });
+  assert.equal(otherActivityAttempt.response.status, 404);
+  assert.equal(otherActivityAttempt.body.code, "ATTEMPT_NOT_FOUND");
+  const otherUserAttempt = await putAnswer("actividad-publica", firstAttempt.body.attempt.id, 1, { groupCode: "grupo-a", answer: "ajena" }, otherStudentToken);
+  assert.equal(otherUserAttempt.response.status, 404);
+  assert.equal(otherUserAttempt.body.code, "ATTEMPT_NOT_FOUND");
   const persistedAttempt = new DatabaseSync(databasePath);
   const initialValues = persistedAttempt.prepare(`
     SELECT estado AS state, puntaje_obtenido AS score, porcentaje AS percentage
     FROM intentos_actividad WHERE submission_id = 'inicio-uno'
   `).get();
-  persistedAttempt.close();
   assert.equal(initialValues.state, "en_progreso");
   assert.equal(initialValues.score, 0);
   assert.equal(initialValues.percentage, 0);
+  const savedRaw = persistedAttempt.prepare(`
+    SELECT respuesta_dada_json AS answer, respuesta_normalizada_json AS normalized, correcta AS correct, puntaje_obtenido AS score
+    FROM respuestas_intento_actividad WHERE intento_id = ?1 AND pregunta_id = 1
+  `).get(firstAttempt.body.attempt.id);
+  assert.equal(savedRaw.answer, '"segunda versión"');
+  assert.equal(savedRaw.normalized, '"segunda versión"');
+  assert.equal(savedRaw.correct, 0);
+  assert.equal(savedRaw.score, 0);
+  persistedAttempt.close();
+
+  const multiAttempt = await postAttempt("actividad-respuestas", { submissionId: "respuestas-multiples" });
+  assert.equal(multiAttempt.response.status, 201);
+  const savedMultiFirst = await putAnswer("actividad-respuestas", multiAttempt.body.attempt.id, 1, { answer: "uno" });
+  const savedMultiSecond = await putAnswer("actividad-respuestas", multiAttempt.body.attempt.id, 2, { answer: ["dos", "tres"] });
+  assert.equal(savedMultiFirst.response.status, 200);
+  assert.equal(savedMultiSecond.response.status, 200);
+  const persistedMultiple = new DatabaseSync(databasePath);
+  const multipleRows = persistedMultiple.prepare("SELECT COUNT(*) AS total FROM respuestas_intento_actividad WHERE intento_id = ?1").get(multiAttempt.body.attempt.id);
+  persistedMultiple.close();
+  assert.equal(multipleRows.total, 2);
+  const sentAnswer = await putAnswer("actividad-agotada", sentAttemptId, 1, { answer: "bloqueada" });
+  assert.equal(sentAnswer.response.status, 409);
+  assert.equal(sentAnswer.body.code, "ATTEMPT_NOT_EDITABLE");
+  const annulledAnswer = await putAnswer("actividad-anulada", annulledAttemptId, 1, { answer: "bloqueada" });
+  assert.equal(annulledAnswer.response.status, 409);
+  assert.equal(annulledAnswer.body.code, "ATTEMPT_NOT_EDITABLE");
 
   const repeatedAttempt = await postAttempt("actividad-publica", { groupCode: "grupo-a", submissionId: "inicio-uno" });
   assert.equal(repeatedAttempt.response.status, 201);

@@ -3,7 +3,7 @@ import { ActivationAdminError, listActivationCandidates, parseReissuePayload, re
 import { listCoursesForUser } from "./course-catalog";
 import { activateLocalAccount, clearSessionCookie, loginLocalAccount, readJsonBody, requestHasValidOrigin, revokeLocalSession, sessionCookie } from "./local-auth";
 import { applyStudentImport, previewStudentImport, readStudentImportBody, StudentImportError } from "./student-import";
-import { createOrRecoverStudentActivityAttempt, getStudentActivity, StudentActivityError } from "./student-activity";
+import { createOrRecoverStudentActivityAttempt, getStudentActivity, saveStudentActivityAnswer, StudentActivityError } from "./student-activity";
 
 export interface Env {
   DB: D1Database;
@@ -102,6 +102,38 @@ async function handleApi(request: Request, env: Env, url: URL) {
       if (error instanceof StudentActivityError) return json({ code: error.code, error: error.message }, error.status);
       console.error("Fallo interno al crear o recuperar un intento estudiantil");
       return json({ code: "INTERNAL_ERROR", error: "No fue posible preparar el intento" }, 500);
+    }
+  }
+
+  const answerMatch = /^\/api\/me\/activities\/([^/]+)\/attempts\/([^/]+)\/responses\/([^/]+)$/.exec(url.pathname);
+  if (request.method === "PUT" && answerMatch) {
+    if (!requestHasValidOrigin(request)) return json({ error: "Origen de solicitud inválido" }, 403);
+    const user = await authenticateRequest(request, env.DB);
+    if (!user) return json({ code: "SESSION_REQUIRED", error: "Sesión requerida" }, 401);
+    const body = await readJsonBody(request);
+    if (!body || !Object.hasOwn(body, "answer") || (body.groupCode !== undefined && typeof body.groupCode !== "string")) {
+      return json({ code: "INVALID_REQUEST", error: "La solicitud debe incluir una respuesta JSON válida." }, 400);
+    }
+    let slug: string;
+    try {
+      slug = decodeURIComponent(answerMatch[1]);
+    } catch {
+      return json({ code: "ACTIVITY_NOT_FOUND", error: "La actividad no fue encontrada" }, 404);
+    }
+    try {
+      return json(await saveStudentActivityAnswer(
+        env.DB,
+        user.id,
+        slug,
+        typeof body.groupCode === "string" ? body.groupCode : null,
+        answerMatch[2],
+        answerMatch[3],
+        body.answer,
+      ));
+    } catch (error) {
+      if (error instanceof StudentActivityError) return json({ code: error.code, error: error.message }, error.status);
+      console.error("Fallo interno al guardar una respuesta estudiantil");
+      return json({ code: "INTERNAL_ERROR", error: "No fue posible guardar la respuesta" }, 500);
     }
   }
 
