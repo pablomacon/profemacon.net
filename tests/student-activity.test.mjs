@@ -148,7 +148,8 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
       (17, 'actividad-reintento-deshabilitada', 1, 'unidad-1', 'tema', 17, 'Reintento tras deshabilitar', '', 'activa', 1, 2),
       (18, 'actividad-respuestas', 1, 'unidad-1', 'tema', 18, 'Actividad de respuestas', '', 'activa', 2, 1),
       (19, 'actividad-submit', 1, 'unidad-1', 'tema', 19, 'Actividad de entrega', '', 'activa', 3, 2),
-      (20, 'actividad-revision-deshabilitada', 1, 'unidad-1', 'tema', 20, 'Revisión deshabilitada', '', 'activa', 1, 1);
+      (20, 'actividad-revision-deshabilitada', 1, 'unidad-1', 'tema', 20, 'Revisión deshabilitada', '', 'activa', 1, 1),
+      (21, 'actividad-borrador-concurrente', 1, 'unidad-1', 'tema', 21, 'Borrador concurrente', '', 'activa', 1, 2);
     INSERT INTO habilitaciones_actividad
       (id, actividad_id, grupo_id, habilitada, disponible_desde, disponible_hasta)
     VALUES
@@ -161,7 +162,7 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
       (14, 12, 1, 1, NULL, NULL), (15, 13, 1, 1, datetime('now'), NULL),
       (16, 14, 1, 1, NULL, datetime('now')), (17, 15, 1, 1, NULL, NULL),
       (18, 16, 1, 1, NULL, NULL), (19, 17, 1, 1, NULL, NULL), (20, 18, 1, 1, NULL, NULL),
-      (21, 19, 1, 1, NULL, NULL), (22, 20, 1, 1, NULL, NULL);
+      (21, 19, 1, 1, NULL, NULL), (22, 20, 1, 1, NULL, NULL), (23, 21, 1, 1, NULL, NULL);
     INSERT INTO preguntas_actividad
       (id, actividad_id, numero, tipo, enunciado, instrucciones, opciones_json, recursos_json, placeholder, puntaje, clave_correccion_json, retroalimentacion_correcta, retroalimentacion_incorrecta)
     VALUES
@@ -177,7 +178,8 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
       (10, 18, 2, 'text', 'Segunda respuesta', '', '[]', '[]', NULL, 1, '["x"]', '', ''),
       (11, 19, 1, 'radio', 'Radio de entrega', '', '[]', '[]', NULL, 1, '{"modo":"opcion","correctas":["b"]}', 'Feedback privado correcto', 'Feedback privado incorrecto'),
       (12, 19, 2, 'text', 'Texto de entrega', '', '[]', '[]', NULL, 1, '{"modo":"texto-exacto","aceptadas":["valor"]}', 'Feedback privado correcto', 'Feedback privado incorrecto'),
-      (13, 19, 3, 'checkbox', 'Checkbox de entrega', '', '[]', '[]', NULL, 1, '{"modo":"seleccion-exacta","correctas":["a","c"]}', 'Feedback privado correcto', 'Feedback privado incorrecto');
+      (13, 19, 3, 'checkbox', 'Checkbox de entrega', '', '[]', '[]', NULL, 1, '{"modo":"seleccion-exacta","correctas":["a","c"]}', 'Feedback privado correcto', 'Feedback privado incorrecto'),
+      (14, 21, 1, 'radio', 'Pregunta concurrente', '', '[]', '[]', NULL, 1, '{"modo":"opcion","correctas":["a"]}', '', '');
   `);
   database.exec("UPDATE actividades SET mostrar_revision = 0 WHERE id = 20");
   const sentAttemptId = insertAttempt(database, 6, 8, 1, 1, 1, "agotada-uno");
@@ -190,9 +192,9 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
   `);
   const annulledAttemptId = insertAttempt(database, 7, 9, 1, 1, 1, "anulada-uno");
   database.exec(`UPDATE intentos_actividad SET estado = 'anulado' WHERE id = ${annulledAttemptId}`);
-  const inProgressAttemptId = insertAttempt(database, 8, 10, 1, 1, 1, "progreso-uno");
-  const cancelledAfterProgressId = insertAttempt(database, 8, 10, 1, 2, 2, "progreso-anulado");
+  const cancelledAfterProgressId = insertAttempt(database, 8, 10, 1, 1, 1, "progreso-anulado");
   database.exec(`UPDATE intentos_actividad SET estado = 'anulado' WHERE id = ${cancelledAfterProgressId}`);
+  const inProgressAttemptId = insertAttempt(database, 8, 10, 1, 2, 1, "progreso-uno");
 
   const bestByPercentageId = insertAttempt(database, 9, 11, 1, 1, 1, "mejor-porcentaje", 200);
   sendAttempt(database, bestByPercentageId, [
@@ -370,6 +372,7 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
   assert.equal(available.body.attempts.used, 0);
   assert.equal(available.body.attempts.remaining, 3);
   assert.equal(available.body.attempts.best, null);
+  assert.equal(available.body.attempts.draft, null);
   assert.deepEqual(available.body.questions, [{ number: 1, type: "radio", prompt: "Pregunta pública", instructions: "Elegí una opción", options: ["a", "b"], resources: ["recurso-publico"], placeholder: "No corresponde", points: 1 }]);
   const serialized = JSON.stringify(available.body);
   for (const forbidden of ["clave_correccion_json", "retroalimentacion_correcta", "retroalimentacion_incorrecta", "respuesta_normalizada_json", "respuesta_dada_json", "correcta", "devolucion", "explicacion_revision_final", "correctAnswer"]) {
@@ -491,6 +494,27 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
   assert.equal(JSON.stringify(savedFirst.body).includes("correctAnswer"), false);
   const updatedFirst = await putAnswer("actividad-publica", firstAttempt.body.attempt.id, 1, { groupCode: "grupo-a", answer: "segunda versión" });
   assert.equal(updatedFirst.response.status, 200);
+  const discoveredDraft = await get("/api/me/activities/actividad-publica?groupCode=grupo-a");
+  assert.equal(discoveredDraft.response.status, 200);
+  assert.deepEqual(discoveredDraft.body.attempts.draft, {
+    attemptId: firstAttempt.body.attempt.id,
+    ordinal: 1,
+    startedAt: discoveredDraft.body.attempts.draft.startedAt,
+  });
+  const recoveredFirst = await get(`/api/me/activities/actividad-publica/attempts/${firstAttempt.body.attempt.id}?groupCode=grupo-a`);
+  assert.equal(recoveredFirst.response.status, 200);
+  assert.equal(recoveredFirst.response.headers.get("Cache-Control"), "no-store");
+  assert.deepEqual(recoveredFirst.body.questions[0], {
+    number: 1,
+    type: "radio",
+    prompt: "Pregunta pública",
+    instructions: "Elegí una opción",
+    options: ["a", "b"],
+    resources: ["recurso-publico"],
+    placeholder: "No corresponde",
+    points: 1,
+    answer: "segunda versión",
+  });
   const snapshotBeforeMutation = new DatabaseSync(databasePath);
   const storedSnapshot = snapshotBeforeMutation.prepare(`
     SELECT enunciado_snapshot AS prompt, puntaje_maximo AS points, clave_correccion_snapshot_json AS key
@@ -507,6 +531,26 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
   snapshotBeforeMutation.close();
   const savedAfterOriginalMutation = await putAnswer("actividad-publica", firstAttempt.body.attempt.id, 1, { groupCode: "grupo-a", answer: "sigue usando snapshot" });
   assert.equal(savedAfterOriginalMutation.response.status, 200);
+  const recoveredAfterMutation = await get(`/api/me/activities/actividad-publica/attempts/${firstAttempt.body.attempt.id}?groupCode=grupo-a`);
+  assert.equal(recoveredAfterMutation.response.status, 200);
+  assert.equal(recoveredAfterMutation.body.questions[0].prompt, "Pregunta pública");
+  assert.equal(recoveredAfterMutation.body.questions[0].instructions, "Elegí una opción");
+  assert.deepEqual(recoveredAfterMutation.body.questions[0].options, ["a", "b"]);
+  assert.deepEqual(recoveredAfterMutation.body.questions[0].resources, ["recurso-publico"]);
+  assert.equal(recoveredAfterMutation.body.questions[0].placeholder, "No corresponde");
+  const recoveredSerialized = JSON.stringify(recoveredAfterMutation.body);
+  for (const forbidden of ["clave_correccion", "correctAnswer", "correctas", "aceptadas", "explicacion_revision_final", "\"modo\""]) {
+    assert.equal(recoveredSerialized.includes(forbidden), false, `borrador no debe incluir ${forbidden}`);
+  }
+  const foreignDraft = await get(`/api/me/activities/actividad-publica/attempts/${firstAttempt.body.attempt.id}?groupCode=grupo-a`, otherStudentToken);
+  assert.equal(foreignDraft.response.status, 404);
+  assert.equal(foreignDraft.body.code, "ATTEMPT_NOT_FOUND");
+  const wrongGroupDraft = await get(`/api/me/activities/actividad-publica/attempts/${firstAttempt.body.attempt.id}?groupCode=grupo-b`);
+  assert.equal(wrongGroupDraft.response.status, 404);
+  assert.equal(wrongGroupDraft.body.code, "ATTEMPT_NOT_FOUND");
+  const wrongSlugDraft = await get(`/api/me/activities/actividad-en-progreso/attempts/${firstAttempt.body.attempt.id}`);
+  assert.equal(wrongSlugDraft.response.status, 404);
+  assert.equal(wrongSlugDraft.body.code, "ATTEMPT_NOT_FOUND");
   const wrongQuestion = await putAnswer("actividad-publica", firstAttempt.body.attempt.id, 2, { groupCode: "grupo-a", answer: "ajena" });
   assert.equal(wrongQuestion.response.status, 404);
   assert.equal(wrongQuestion.body.code, "QUESTION_NOT_FOUND");
@@ -543,6 +587,9 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
   const initialSnapshotRows = snapshotAtCreation.prepare("SELECT COUNT(*) AS total FROM preguntas_intento_actividad WHERE intento_id = ?1").get(multiAttempt.body.attempt.id);
   snapshotAtCreation.close();
   assert.equal(initialSnapshotRows.total, 2, "incluye preguntas todavía no respondidas");
+  const recoveredEmptyMulti = await get(`/api/me/activities/actividad-respuestas/attempts/${multiAttempt.body.attempt.id}`);
+  assert.equal(recoveredEmptyMulti.response.status, 200);
+  assert.deepEqual(recoveredEmptyMulti.body.questions.map((question) => question.answer), [null, null]);
   const savedMultiFirst = await putAnswer("actividad-respuestas", multiAttempt.body.attempt.id, 1, { answer: "uno" });
   const savedMultiSecond = await putAnswer("actividad-respuestas", multiAttempt.body.attempt.id, 2, { answer: ["dos", "tres"] });
   assert.equal(savedMultiFirst.response.status, 200);
@@ -553,6 +600,12 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
   persistedMultiple.close();
   assert.equal(multipleRows.total, 2);
   assert.equal(multiSnapshot.total, 2);
+  const recoveredMulti = await get(`/api/me/activities/actividad-respuestas/attempts/${multiAttempt.body.attempt.id}`);
+  assert.equal(recoveredMulti.response.status, 200);
+  assert.deepEqual(recoveredMulti.body.questions.map((question) => ({ type: question.type, answer: question.answer })), [
+    { type: "radio", answer: "uno" },
+    { type: "text", answer: ["dos", "tres"] },
+  ]);
   const sentAnswer = await putAnswer("actividad-agotada", sentAttemptId, 1, { answer: "bloqueada" });
   assert.equal(sentAnswer.response.status, 409);
   assert.equal(sentAnswer.body.code, "ATTEMPT_NOT_EDITABLE");
@@ -596,23 +649,14 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
   assert.equal(incompatibleIdempotency.response.status, 409);
   assert.equal(incompatibleIdempotency.body.code, "IDEMPOTENCY_CONFLICT");
 
-  const secondAttempt = await postAttempt("actividad-publica", { groupCode: "grupo-a", submissionId: "inicio-dos" });
-  assert.equal(secondAttempt.response.status, 201);
-  assert.equal(secondAttempt.body.attempt.number, 2);
-  const thirdAttempt = await postAttempt("actividad-publica", { groupCode: "grupo-a", submissionId: "inicio-tres" });
-  assert.equal(thirdAttempt.response.status, 201);
-  assert.equal(thirdAttempt.body.attempt.number, 3);
-  const exhaustedAttempt = await postAttempt("actividad-publica", { groupCode: "grupo-a", submissionId: "inicio-cuatro" });
-  assert.equal(exhaustedAttempt.response.status, 409);
-  assert.equal(exhaustedAttempt.body.code, "NO_ATTEMPTS_AVAILABLE");
+  const duplicateDraft = await postAttempt("actividad-publica", { groupCode: "grupo-a", submissionId: "inicio-dos" });
+  assert.equal(duplicateDraft.response.status, 409);
+  assert.equal(duplicateDraft.body.code, "DRAFT_EXISTS");
 
   const annulatedDoesNotConsume = await postAttempt("actividad-anulada", { submissionId: "despues-de-anulado" });
   assert.equal(annulatedDoesNotConsume.response.status, 201);
   assert.equal(annulatedDoesNotConsume.body.attempt.number, 2);
   assert.equal(annulatedDoesNotConsume.body.attempt.ordinal, 1);
-  const otherActivity = await postAttempt("actividad-en-progreso", { submissionId: "inicio-uno" });
-  assert.equal(otherActivity.response.status, 201);
-  assert.equal(otherActivity.body.attempt.number, 3);
 
   const anonymousSubmit = await fetch(`${baseUrl}/api/me/activities/actividad-submit/attempts/1/submit`, {
     method: "POST",
@@ -652,6 +696,13 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
   assert.equal((await putAnswer("actividad-submit", submitDraft.body.attempt.id, 1, { answer: "b" })).response.status, 200);
   assert.equal((await putAnswer("actividad-submit", submitDraft.body.attempt.id, 2, { answer: " valor " })).response.status, 200);
   assert.equal((await putAnswer("actividad-submit", submitDraft.body.attempt.id, 3, { answer: ["c", "a"] })).response.status, 200);
+  const recoveredSubmitDraft = await get(`/api/me/activities/actividad-submit/attempts/${submitDraft.body.attempt.id}`);
+  assert.equal(recoveredSubmitDraft.response.status, 200);
+  assert.deepEqual(recoveredSubmitDraft.body.questions.map((question) => ({ type: question.type, answer: question.answer })), [
+    { type: "radio", answer: "b" },
+    { type: "text", answer: " valor " },
+    { type: "checkbox", answer: ["c", "a"] },
+  ]);
   const concurrentSubmit = await Promise.all([
     submit("actividad-submit", submitDraft.body.attempt.id),
     submit("actividad-submit", submitDraft.body.attempt.id),
@@ -786,9 +837,11 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
   assert.equal(otherStudentReview.body.code, "REVIEW_NOT_AVAILABLE");
 
   const concurrent = await Promise.all([
-    postAttempt("actividad-en-progreso", { submissionId: "concurrente-a" }),
-    postAttempt("actividad-en-progreso", { submissionId: "concurrente-b" }),
+    postAttempt("actividad-borrador-concurrente", { submissionId: "concurrente-a" }),
+    postAttempt("actividad-borrador-concurrente", { submissionId: "concurrente-b" }),
   ]);
-  assert.equal(concurrent.filter(({ response }) => response.status === 201).length, 1, "D1 acepta sólo un cupo concurrente restante");
-  assert.equal(concurrent.filter(({ body }) => body.code === "NO_ATTEMPTS_AVAILABLE").length, 1);
+  assert.equal(concurrent.filter(({ response }) => response.status === 201).length, 1, "D1 acepta un único borrador concurrente");
+  assert.equal(concurrent.filter(({ body }) => body.code === "DRAFT_EXISTS").length, 1);
+  const concurrentDraftState = await get("/api/me/activities/actividad-borrador-concurrente");
+  assert.equal(concurrentDraftState.body.attempts.draft.attemptId, concurrent.find(({ response }) => response.status === 201).body.attempt.id);
 });

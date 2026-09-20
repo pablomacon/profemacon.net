@@ -57,6 +57,7 @@ export class StudentActivityError extends Error {
       | "NO_ATTEMPTS_AVAILABLE"
       | "INVALID_SUBMISSION_ID"
       | "IDEMPOTENCY_CONFLICT"
+      | "DRAFT_EXISTS"
       | "ACTIVITY_UNAVAILABLE"
       | "ATTEMPT_NOT_FOUND"
       | "ATTEMPT_NOT_EDITABLE"
@@ -81,6 +82,12 @@ type AttemptRow = {
   ordinal: number | null;
   submissionId: string;
   createdAt: string;
+};
+
+type DraftRow = {
+  id: number;
+  ordinal: number | null;
+  startedAt: string;
 };
 
 type ActivityQuestionRow = {
@@ -197,7 +204,16 @@ async function summarizeAttempts(db: D1Database, activityId: number, accessId: n
     ORDER BY i.porcentaje DESC, i.puntaje_obtenido DESC, i.enviado_en ASC
     LIMIT 1
   `).bind(activityId, accessId, userId).first<BestAttemptRow>();
-  return { used: usedRow?.used ?? 0, best };
+  const draft = await db.prepare(`
+    SELECT i.id, i.ordinal_efectivo AS ordinal, i.enviado_en AS startedAt
+    FROM intentos_actividad i
+    WHERE i.actividad_id = ?1
+      AND i.habilitacion_id = ?2
+      AND i.usuario_id = ?3
+      AND i.estado = 'en_progreso'
+    LIMIT 1
+  `).bind(activityId, accessId, userId).first<DraftRow>();
+  return { used: usedRow?.used ?? 0, best, draft };
 }
 
 async function listPublicQuestions(db: D1Database, activityId: number) {
@@ -285,6 +301,25 @@ async function findAttemptBySubmissionId(db: D1Database, userId: number, activit
   `).bind(userId, activityId, submissionId).first<AttemptRow>();
 }
 
+async function findActiveDraft(db: D1Database, userId: number, activityId: number, habilitationId: number) {
+  return db.prepare(`
+    SELECT
+      i.id,
+      i.habilitacion_id AS habilitationId,
+      i.estado AS state,
+      i.numero_intento AS number,
+      i.ordinal_efectivo AS ordinal,
+      i.submission_id AS submissionId,
+      i.enviado_en AS createdAt
+    FROM intentos_actividad i
+    WHERE i.usuario_id = ?1
+      AND i.actividad_id = ?2
+      AND i.habilitacion_id = ?3
+      AND i.estado = 'en_progreso'
+    LIMIT 1
+  `).bind(userId, activityId, habilitationId).first<AttemptRow>();
+}
+
 function publicAttempt(attempt: AttemptRow, access: AccessRow) {
   return {
     attempt: {
@@ -331,7 +366,7 @@ export async function getStudentActivity(db: D1Database, userId: number, slug: s
     );
   }
 
-  const { used, best } = await summarizeAttempts(db, activity.id, access.habilitationId, userId);
+  const { used, best, draft } = await summarizeAttempts(db, activity.id, access.habilitationId, userId);
   const status = statusFor(access, used, activity.maxAttempts);
   const questions = status === "available" ? await listPublicQuestions(db, activity.id) : [];
 
@@ -365,6 +400,7 @@ export async function getStudentActivity(db: D1Database, userId: number, slug: s
         percentage: best.percentage,
         submittedAt: best.submittedAt,
       } : null,
+      draft: draft ? { attemptId: draft.id, ordinal: draft.ordinal, startedAt: draft.startedAt } : null,
     },
     questions,
   };
@@ -389,6 +425,10 @@ export async function createOrRecoverStudentActivityAttempt(
   }
 
   assertAttemptCanStart(access);
+
+  if (await findActiveDraft(db, userId, activity.id, access.habilitationId)) {
+    throw new StudentActivityError(409, "DRAFT_EXISTS", "Ya tenés un intento en progreso para esta actividad.");
+  }
 
   try {
     await db.prepare(`
@@ -421,6 +461,9 @@ export async function createOrRecoverStudentActivityAttempt(
         throw new StudentActivityError(409, "IDEMPOTENCY_CONFLICT", "submissionId ya pertenece a otro grupo de esta actividad.");
       }
       return publicAttempt(afterConflict, access);
+    }
+    if (await findActiveDraft(db, userId, activity.id, access.habilitationId)) {
+      throw new StudentActivityError(409, "DRAFT_EXISTS", "Ya tenés un intento en progreso para esta actividad.");
     }
     const message = error instanceof Error ? error.message : "";
     if (message.includes("máximo de intentos")) {
@@ -531,6 +574,91 @@ export async function saveStudentActivityAnswer(
     attempt: { id: attempt.id, state: attempt.state },
     question: { number: question.number, type: question.type },
     saved: true,
+  };
+}
+
+export async function getStudentActivityDraft(
+  db: D1Database,
+  userId: number,
+  slug: string,
+  groupCode: string | null,
+  attemptValue: unknown,
+) {
+  const attemptId = validateAttemptId(attemptValue);
+  const { activity, access } = await resolveStudentActivityAccess(db, userId, slug, groupCode);
+  const attempt = await db.prepare(`
+    SELECT
+      i.id,
+      i.estado AS state,
+      i.numero_intento AS number,
+      i.ordinal_efectivo AS ordinal,
+      i.enviado_en AS startedAt
+    FROM intentos_actividad i
+    WHERE i.id = ?1
+      AND i.usuario_id = ?2
+      AND i.actividad_id = ?3
+      AND i.habilitacion_id = ?4
+    LIMIT 1
+  `).bind(attemptId, userId, activity.id, access.habilitationId).first<{
+    id: number;
+    state: AttemptRow["state"];
+    number: number;
+    ordinal: number | null;
+    startedAt: string;
+  }>();
+  if (!attempt) throw new StudentActivityError(404, "ATTEMPT_NOT_FOUND", "El intento no fue encontrado.");
+  if (attempt.state !== "en_progreso") {
+    throw new StudentActivityError(409, "ATTEMPT_NOT_EDITABLE", "El intento ya no puede recuperarse como borrador.");
+  }
+
+  const questions = await db.prepare(`
+    SELECT
+      p.numero_pregunta AS number,
+      p.tipo_pregunta AS type,
+      p.enunciado_snapshot AS prompt,
+      p.instrucciones_snapshot AS instructions,
+      p.opciones_snapshot_json AS optionsJson,
+      p.recursos_snapshot_json AS resourcesJson,
+      p.placeholder_snapshot AS placeholder,
+      p.puntaje_maximo AS points,
+      r.respuesta_dada_json AS answerJson
+    FROM preguntas_intento_actividad p
+    LEFT JOIN respuestas_intento_actividad r
+      ON r.intento_id = p.intento_id
+     AND r.pregunta_id = p.pregunta_origen_id
+    WHERE p.intento_id = ?1
+    ORDER BY p.numero_pregunta
+  `).bind(attempt.id).all<QuestionRow & { answerJson: string | null }>();
+  if (questions.results.length === 0) {
+    throw new StudentActivityError(409, "ATTEMPT_NOT_EDITABLE", "El borrador no tiene preguntas recuperables.");
+  }
+
+  return {
+    activity: {
+      slug: activity.slug,
+      title: activity.title,
+      description: activity.description,
+      totalPoints: activity.totalPoints,
+    },
+    access: { groupCode: access.groupCode, groupName: access.groupName },
+    attempt: {
+      id: attempt.id,
+      status: attempt.state,
+      number: attempt.number,
+      ordinal: attempt.ordinal,
+      startedAt: attempt.startedAt,
+    },
+    questions: questions.results.map((question) => ({
+      number: question.number,
+      type: question.type,
+      prompt: question.prompt,
+      instructions: question.instructions,
+      options: jsonArray(question.optionsJson),
+      resources: jsonArray(question.resourcesJson),
+      placeholder: question.placeholder,
+      points: question.points,
+      answer: question.answerJson === null ? null : parsePublicStoredAnswer(question.answerJson),
+    })),
   };
 }
 

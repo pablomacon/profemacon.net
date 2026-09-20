@@ -3,7 +3,7 @@ import { ActivationAdminError, listActivationCandidates, parseReissuePayload, re
 import { listCoursesForUser } from "./course-catalog";
 import { activateLocalAccount, clearSessionCookie, loginLocalAccount, readJsonBody, requestHasValidOrigin, revokeLocalSession, sessionCookie } from "./local-auth";
 import { applyStudentImport, previewStudentImport, readStudentImportBody, StudentImportError } from "./student-import";
-import { createOrRecoverStudentActivityAttempt, getStudentActivity, getStudentActivityReview, saveStudentActivityAnswer, StudentActivityError, submitStudentActivityAttempt } from "./student-activity";
+import { createOrRecoverStudentActivityAttempt, getStudentActivity, getStudentActivityDraft, getStudentActivityReview, saveStudentActivityAnswer, StudentActivityError, submitStudentActivityAttempt } from "./student-activity";
 
 export interface Env {
   DB: D1Database;
@@ -164,6 +164,25 @@ async function handleApi(request: Request, env: Env, url: URL) {
   }
 
   if (request.method !== "GET") return json({ error: "Método no permitido" }, 405);
+
+  const draftMatch = /^\/api\/me\/activities\/([^/]+)\/attempts\/([^/]+)$/.exec(url.pathname);
+  if (draftMatch) {
+    const user = await authenticateRequest(request, env.DB);
+    if (!user) return json({ code: "SESSION_REQUIRED", error: "Sesión requerida" }, 401);
+    let slug: string;
+    try {
+      slug = decodeURIComponent(draftMatch[1]);
+    } catch {
+      return json({ code: "ACTIVITY_NOT_FOUND", error: "La actividad no fue encontrada" }, 404);
+    }
+    try {
+      return json(await getStudentActivityDraft(env.DB, user.id, slug, url.searchParams.get("groupCode"), draftMatch[2]));
+    } catch (error) {
+      if (error instanceof StudentActivityError) return json({ code: error.code, error: error.message }, error.status);
+      console.error("Fallo interno al recuperar un borrador estudiantil");
+      return json({ code: "INTERNAL_ERROR", error: "No fue posible recuperar el borrador" }, 500);
+    }
+  }
 
   const reviewMatch = /^\/api\/me\/activities\/([^/]+)\/review$/.exec(url.pathname);
   if (reviewMatch) {
