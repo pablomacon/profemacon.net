@@ -199,11 +199,15 @@ Sus archivos están bajo:
 - `content/programacion-i/unidad-1/`;
 - `src/courses/programacion-i/unidad-1/`.
 
-### 6.3. Limitación actual del catálogo
+### 6.3. Catálogo autenticado
 
-`GET /api/me/courses` consulta correctamente inscripciones y asignaciones del usuario autenticado. Sin embargo, la pantalla “Mis cursos” todavía muestra tarjetas codificadas directamente en React y no consume este endpoint. Tampoco redirige a usuarios anónimos.
+El Hito 3 está completado. La pantalla “Mis cursos” consume `GET /api/me/courses` y el frontend distingue explícitamente los estados de sesión `checking`, `authenticated`, `anonymous` y `error`. La vista gestiona carga, error y reintento, sesión vencida, usuario sin cursos y catálogos con uno o varios accesos como estudiante, docente o practicante.
 
-Los materiales no contienen información privada, por lo que las rutas estáticas pueden verse durante el desarrollo. Antes de publicar por grupo, el Worker deberá decidir qué contenido está visible para cada sesión según las tablas de publicaciones.
+`src/course-registry.ts` mantiene un registro explícito y seguro del contenido frontend disponible. No se construyen rutas desde códigos arbitrarios recibidos de la API: un curso registrado ofrece su entrada conocida y cualquier otro se muestra sin navegación con “Contenido todavía no disponible”. En particular, `programacion-demo` conserva ese estado sin contenido.
+
+Las comprobaciones de sesión se cancelan al desmontar y se invalidan cuando una solicitud posterior las vuelve obsoletas. Si la comprobación de `/api/session` posterior al ingreso falla, el formulario abandona correctamente el estado de envío y permite volver a intentar.
+
+Los materiales no contienen información privada, por lo que las rutas internas estáticas de las unidades continúan accesibles durante el desarrollo sin protección basada en el catálogo. Esta limitación es consciente y quedó fuera del alcance del Hito 3. Antes de publicar por grupo, el Worker deberá decidir qué contenido está visible para cada sesión según las tablas de publicaciones.
 
 ## 7. Actividades autocorregibles
 
@@ -279,13 +283,13 @@ La implementación actual superó las siguientes comprobaciones:
 - respuesta `403` ante un origen ajeno en una operación de autenticación;
 - ausencia de sesiones activas al terminar las pruebas;
 - `git diff --check` sin errores de espacios;
-- 11 pruebas automatizadas aprobadas, incluidas normalización, HMAC documental, nombres de usuario y validación del lote;
+- 15 pruebas automatizadas aprobadas, incluidas criptografía, normalización, HMAC documental, nombres de usuario, validación del lote y entrega de activaciones;
 - build de producción aprobado con los endpoints de previsualización y aplicación;
 - recorrido HTTP ficticio aprobado: autenticación docente, previsualización, aplicación, devolución única de activación, rechazo del lote repetido y cierre de sesión.
 
 El portafolio real de referencia continúa produciendo una previsualización agregada de 19 filas válidas, cero filas inválidas, cero documentos duplicados y cero colisiones en las bases de usuario. Esa comprobación no imprime nombres ni documentos y no aplica el archivo a D1.
 
-Playwright ejecutó catorce comprobaciones en Chromium: acceso sin sesión, restricción por rol, estado inicial del asistente, lectura local del portafolio autorizado, entrega individual ficticia y reemisión administrativa, en escritorio y móvil según corresponda. La inspección visual de las referencias confirmó que las pantallas son legibles y no desbordan horizontalmente. Las capturas contienen sólo estados e identidades ficticias; la prueba con el portafolio real no genera captura, traza ni video.
+`tests/e2e/my-courses.spec.ts` cubre el catálogo autenticado, los estados de sesión, roles, contenido conocido y desconocido, errores, reintentos y ausencia de desbordamiento. Sus 17 escenarios pasan en escritorio y móvil: 34 casos aprobados. Las seis diferencias visuales preexistentes del resto de Playwright continúan pendientes de revisión y sus snapshots no fueron actualizados. Las capturas existentes contienen sólo estados e identidades ficticias; la prueba con el portafolio real no genera captura, traza ni video.
 
 La integración local contra D1 reemitió dos códigos sucesivos para una cuenta ficticia, comprobó que el primero fuese rechazado inmediatamente después de la segunda emisión y confirmó que una cuenta con contraseña ya no admite reemisión. La salida de la prueba contiene sólo contadores y estados agregados.
 
@@ -310,7 +314,7 @@ No se deben introducir datos personales reales en semillas, fixtures, Markdown, 
 
 ## 11. Deuda técnica conocida
 
-- “Mis cursos” todavía está codificado en React.
+- Las rutas internas estáticas de las unidades todavía no están protegidas por pertenencia al catálogo; fue una decisión consciente fuera del alcance del Hito 3.
 - Los contenidos no están filtrados por publicación/grupo.
 - El corrector de actividades está desconectado.
 - No hay flujo de restablecimiento de contraseña.
@@ -351,10 +355,11 @@ El orden recomendado es el siguiente.
 
 ### Hito 3 — Catálogo autenticado
 
-- Consumir `/api/me/courses` desde React.
-- Mostrar cursos y roles reales de la sesión.
-- Gestionar estados de carga, sesión vencida y ausencia de cursos.
-- Proteger vistas administrativas por rol.
+- Completado: consumir `/api/me/courses` desde React.
+- Completado: mostrar cursos, grupos y accesos reales de la sesión.
+- Completado: gestionar comprobación de sesión, carga, errores, reintentos, sesión vencida y ausencia de cursos.
+- Completado: vincular códigos conocidos con contenido mediante un registro explícito sin construir rutas desde datos de la API.
+- Completado: cubrir el catálogo en Playwright para escritorio y móvil.
 
 ### Hito 4 — Actividad 1 completa
 
@@ -382,6 +387,6 @@ El orden recomendado es el siguiente.
 
 ## 13. Próximo trabajo concreto
 
-El próximo frente técnico antes de usar datos reales es preparar la configuración remota de `DOCUMENT_HMAC_KEY`. El siguiente frente funcional es convertir **Mis cursos** en una vista autenticada que consuma `/api/me/courses`.
+El próximo frente técnico antes de usar datos reales es preparar la configuración remota de `DOCUMENT_HMAC_KEY`. El siguiente frente funcional es el **Hito 4 — Actividad 1 completa**: consulta segura, entrega, corrección y persistencia transaccional de la actividad.
 
 Hasta configurar y custodiar el secreto remoto no deben importarse cuentas reales. El portafolio de 2025 se mantiene únicamente como archivo de validación y no está mapeado a ningún grupo de D1.

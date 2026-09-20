@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useState, type ReactNode } from "react";
+import { StrictMode, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { Unit0 } from "./courses/programacion-i/unidad-0/lesson";
 import { Unit0Activity } from "./courses/programacion-i/unidad-0/activity";
@@ -7,11 +7,17 @@ import { VariablesJavaActivity1 } from "./courses/programacion-i/unidad-1/activi
 import { Login } from "./login";
 import { ActivationManagement } from "./activation-management";
 import { StudentImportWizard } from "./student-import-wizard";
+import { MyCourses } from "./my-courses";
 import "./styles.css";
 
 type Route = "/" | "/ingresar" | "/mis-cursos" | "/historial" | "/docente" | "/docente/importar-estudiantes" | "/docente/activaciones" | "/practicante" | "/curso/programacion-i/unidad-0" | "/curso/programacion-i/unidad-0/actividad" | "/curso/programacion-i/unidad-1" | "/curso/programacion-i/unidad-1/actividad/variables-java-01";
 type Theme = "dark" | "light";
 type SessionUser = { id: number; username: string; displayName: string; email: string | null; roles: string[] };
+type SessionState =
+  | { status: "checking" }
+  | { status: "authenticated"; user: SessionUser }
+  | { status: "anonymous"; reason: "missing" | "expired" }
+  | { status: "error"; message: string };
 
 const navigation: { label: string; path: Route; icon: string }[] = [
   { label: "Inicio", path: "/", icon: "⌂" },
@@ -125,10 +131,6 @@ function Placeholder({ title, section, detail }: { title: string; section: strin
   );
 }
 
-function Courses() {
-  return <section className="courses-view"><p className="eyebrow">Programación I</p><h1>Mis cursos</h1><article className="course-card"><div><span>Unidad 0</span><h2>Introducción a la programación</h2><p>Informática, computadora, lenguajes de programación, Java y JVM.</p></div><button className="button-primary" onClick={() => navigate("/curso/programacion-i/unidad-0")}>Abrir unidad</button></article><article className="course-card course-card-draft"><div><span>Unidad 1 · Borrador local</span><h2>Variables, tipos de datos y operadores</h2><p>Primer programa, variables, cálculos e intercambio de valores. Incluye cuatro videos integrados.</p></div><button className="button-secondary" onClick={() => navigate("/curso/programacion-i/unidad-1")}>Ver borrador</button></article></section>;
-}
-
 function TeacherPanel({ user }: { user: SessionUser | null }) {
   if (!user) return <section className="placeholder-view"><p className="eyebrow">Administración</p><h1>Panel docente</h1><div className="placeholder-card"><div className="placeholder-mark">PM</div><div><h2>Sesión requerida</h2><p>Ingresá con una cuenta docente para administrar los grupos asignados.</p><button className="button-primary" onClick={() => navigate("/ingresar")}>Ingresar</button></div></div></section>;
   if (!user.roles.some((role) => role === "docente" || role === "administrador")) return <section className="placeholder-view"><p className="eyebrow">Administración</p><h1>Acceso restringido</h1><div className="placeholder-card"><div className="placeholder-mark">PM</div><div><h2>Esta cuenta no administra grupos</h2><p>El panel está disponible únicamente para docentes y administradores autorizados.</p></div></div></section>;
@@ -138,40 +140,72 @@ function TeacherPanel({ user }: { user: SessionUser | null }) {
 function App() {
   const [route, setRoute] = useState<Route>(() => supportedRoutes.includes(window.location.pathname as Route) ? window.location.pathname as Route : "/");
   const [theme, setTheme] = useState<Theme>(() => localStorage.getItem("profemacon-theme") === "light" ? "light" : "dark");
-  const [user, setUser] = useState<SessionUser | null>(null);
+  const [session, setSession] = useState<SessionState>({ status: "checking" });
+  const sessionRequestId = useRef(0);
+  const user = session.status === "authenticated" ? session.user : null;
   useEffect(() => { const listener = () => setRoute(window.location.pathname as Route); window.addEventListener("popstate", listener); return () => window.removeEventListener("popstate", listener); }, []);
   useEffect(() => { localStorage.setItem("profemacon-theme", theme); }, [theme]);
 
-  async function refreshSession() {
-    const response = await fetch("/api/session", { headers: { Accept: "application/json" } });
-    if (!response.ok) {
-      setUser(null);
-      return;
+  const checkSession = useCallback(async (navigateOnSuccess = false, signal?: AbortSignal): Promise<boolean> => {
+    const requestId = ++sessionRequestId.current;
+    setSession({ status: "checking" });
+    try {
+      const response = await fetch("/api/session", { headers: { Accept: "application/json" }, signal });
+      if (signal?.aborted || requestId !== sessionRequestId.current) return false;
+      if (response.status === 401) {
+        setSession({ status: "anonymous", reason: "missing" });
+        return false;
+      }
+      if (!response.ok) throw new Error("El servidor no pudo verificar tu sesión.");
+      const data = await response.json() as { user: SessionUser };
+      if (signal?.aborted || requestId !== sessionRequestId.current) return false;
+      setSession({ status: "authenticated", user: data.user });
+      if (navigateOnSuccess) navigate("/mis-cursos");
+      return true;
+    } catch (error) {
+      if (signal?.aborted || requestId !== sessionRequestId.current || (error instanceof DOMException && error.name === "AbortError")) return false;
+      setSession({
+        status: "error",
+        message: error instanceof Error ? error.message : "No fue posible verificar tu sesión.",
+      });
+      return false;
     }
-    const data = await response.json() as { user: SessionUser };
-    setUser(data.user);
-    navigate("/mis-cursos");
+  }, []);
+  const expireSession = useCallback(() => {
+    sessionRequestId.current += 1;
+    setSession({ status: "anonymous", reason: "expired" });
+  }, []);
+
+  async function refreshSession() {
+    const confirmed = await checkSession(true);
+    if (!confirmed) throw new Error("No pudimos confirmar tu sesión. Intentá nuevamente.");
   }
 
   async function logout() {
-    await fetch("/api/auth/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
-    setUser(null);
-    navigate("/");
+    try {
+      await fetch("/api/auth/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    } finally {
+      sessionRequestId.current += 1;
+      setSession({ status: "anonymous", reason: "missing" });
+      navigate("/");
+    }
   }
 
   useEffect(() => {
-    let cancelled = false;
-    void fetch("/api/session", { headers: { Accept: "application/json" } }).then(async (response) => {
-      if (!response.ok || cancelled) return;
-      const data = await response.json() as { user: SessionUser };
-      if (!cancelled) setUser(data.user);
-    }).catch(() => undefined);
-    return () => { cancelled = true; };
-  }, []);
+    const controller = new AbortController();
+    void checkSession(false, controller.signal);
+    return () => controller.abort();
+  }, [checkSession]);
 
   const view = route === "/" ? <Home />
     : route === "/ingresar" ? user ? <section className="placeholder-view"><p className="eyebrow">Sesión activa</p><h1>{user.displayName}</h1><div className="placeholder-card"><div className="placeholder-mark">PM</div><div><h2>Ya ingresaste</h2><p>Podés continuar a tus cursos o cerrar la sesión desde la barra superior.</p><button className="button-primary" onClick={() => navigate("/mis-cursos")}>Ir a mis cursos</button></div></div></section> : <Login onAuthenticated={refreshSession} />
-    : route === "/mis-cursos" ? <Courses />
+    : route === "/mis-cursos" ? <MyCourses
+      session={session.status === "authenticated" ? { status: "authenticated" } : session}
+      onLogin={() => navigate("/ingresar")}
+      onOpenCourse={(path) => navigate(path)}
+      onRetrySession={() => void checkSession()}
+      onSessionExpired={expireSession}
+    />
     : route === "/curso/programacion-i/unidad-0" ? <Unit0 onBack={() => navigate("/mis-cursos")} onStartActivity={() => navigate("/curso/programacion-i/unidad-0/actividad")} theme={theme} />
     : route === "/curso/programacion-i/unidad-0/actividad" ? <Unit0Activity onBack={() => navigate("/curso/programacion-i/unidad-0")} />
     : route === "/curso/programacion-i/unidad-1" ? <Unit1 onBack={() => navigate("/mis-cursos")} onOpenActivity={() => navigate("/curso/programacion-i/unidad-1/actividad/variables-java-01")} theme={theme} />

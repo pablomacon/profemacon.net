@@ -56,6 +56,23 @@ h1 span { color: #978cda; }
 .course-card { align-items: center; display: flex; gap: 30px; justify-content: space-between; margin-top: 34px; padding: 28px; }
 .course-card > div > span { color: #aaa1ef; font-size: 11px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
 .course-card h2 { font-size: 25px; margin: 8px 0; }
+.course-list { display: grid; gap: 14px; margin-top: 34px; }
+.course-list .course-card { margin-top: 0; }
+.course-card-main { min-width: 0; }
+.course-card-labels { align-items: center; display: flex; flex-wrap: wrap; gap: 9px; }
+.course-card-labels > span:first-child { color: #aaa1ef; font-size: 11px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+.course-access { border: 1px solid #555165; border-radius: 99px; color: #d8d3ef; font-size: 10px; font-weight: 750; letter-spacing: .08em; padding: 4px 8px; text-transform: uppercase; }
+.course-access-docente { border-color: #7369a8; }
+.course-access-practicante { border-color: #5b7185; }
+.course-details { display: flex; flex-wrap: wrap; gap: 12px 24px; margin: 15px 0 0; }
+.course-details div { display: grid; gap: 3px; }
+.course-details dt { color: #858591; font-size: 10px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+.course-details dd { color: #d5d4dc; font-size: 13px; margin: 0; overflow-wrap: anywhere; }
+.course-unavailable { border-left: 2px solid #625e73; margin-top: 18px !important; padding-left: 10px; }
+.course-status { align-items: center; background: #191a21; border: 1px solid #30313a; border-radius: 10px; display: flex; gap: 18px; margin-top: 34px; padding: 25px; }
+.course-status h2 { font-family: "Josefin Sans", Futura, "Century Gothic", sans-serif; font-size: 18px; margin: 0 0 7px; }
+.course-status p { color: #a1a1ad; font-size: 14px; line-height: 1.65; margin: 0; }
+.course-status .button-primary { margin-top: 18px; }
 
 /* Plantilla editorial de unidades */
 .unit-view { margin: 0; max-width: 1060px; width: 100%; }
@@ -302,6 +319,10 @@ h1 span { color: #978cda; }
 .theme-light .module-card.featured { background: linear-gradient(135deg, #f0edfb, #fff 75%); border-color: #c9c3e3; }
 .theme-light .module-card h2, .theme-light .course-card h2, .theme-light .placeholder-card h2 { color: #2d2c37; }
 .theme-light .module-card p, .theme-light .course-card p, .theme-light .placeholder-card p, .theme-light .activity-heading > div > p:not(.eyebrow), .theme-light .choice-list label { color: #666571; }
+.theme-light .course-status { background: #fff; border-color: #dedee6; }
+.theme-light .course-status h2, .theme-light .course-details dd { color: #302d3e; }
+.theme-light .course-status p, .theme-light .course-details dt { color: #696673; }
+.theme-light .course-access { color: #514979; }
 .theme-light .unit-meta span, .theme-light .score { background: #eeebfa; border-color: #cfc8e6; color: #544c7c; }
 .theme-light .markdown-content strong { color: #373541; }
 .theme-light .markdown-content blockquote { background: #f0edfb; color: #5e5870; }
@@ -359,7 +380,7 @@ h1 span { color: #978cda; }
 
 @media (max-width: 1100px) { .learning-plan.is-four { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 900px) { .module-grid, .learning-plan, .learning-plan.is-four, .login-view, .teacher-actions { grid-template-columns: 1fr; } .unit-figures { max-width: 650px; } .import-summary, .import-summary.source-summary { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 780px) { .sidebar { display: none; } .topbar { height: 64px; justify-content: space-between; padding: 0 20px; position: sticky; top: 0; z-index: 20; background: inherit; } .mobile-brand { background: transparent; border: 0; cursor: pointer; display: block; height: 37px; padding: 0; } .mobile-brand img { height: 37px; width: auto; } .environment { display: none; } .content { padding: 34px 22px 55px; } .intro { padding-top: 8px; } .course-card { align-items: flex-start; flex-direction: column; gap: 18px; } .unit-context-nav { top: 64px; } .unit-figures { grid-template-columns: 1fr; } .unit-figures img { height: 200px; } .activity-heading, .unit-activity-prompt, .video-lesson { align-items: flex-start; flex-direction: column; gap: 16px; } .video-lesson { display: flex; } .video-lesson-copy { padding: 3px; } .video-frame { width: 100%; } .match-list label, .order-list label { align-items: stretch; grid-template-columns: 1fr; gap: 6px; } .gallery-dialog { padding: 12px; } .gallery-panel { max-height: calc(100vh - 24px); max-width: calc(100vw - 24px); } .gallery-stage { padding: 16px 50px; } .gallery-arrow { height: 38px; width: 35px; } .gallery-arrow.previous { left: 8px; } .gallery-arrow.next { right: 8px; } }
+@media (max-width: 780px) { .sidebar { display: none; } .topbar { height: 64px; justify-content: space-between; padding: 0 20px; position: sticky; top: 0; z-index: 20; background: inherit; } .mobile-brand { background: transparent; border: 0; cursor: pointer; display: block; height: 37px; padding: 0; } .mobile-brand img { height: 37px; width: auto; } .environment { display: none; } .content { padding: 34px 22px 55px; } .intro { padding-top: 8px; } .course-card { align-items: flex-start; flex-direction: column; gap: 18px; } .course-card > .button-primary { width: 100%; } .course-status { align-items: flex-start; } .unit-context-nav { top: 64px; } .unit-figures { grid-template-columns: 1fr; } .unit-figures img { height: 200px; } .activity-heading, .unit-activity-prompt, .video-lesson { align-items: flex-start; flex-direction: column; gap: 16px; } .video-lesson { display: flex; } .video-lesson-copy { padding: 3px; } .video-frame { width: 100%; } .match-list label, .order-list label { align-items: stretch; grid-template-columns: 1fr; gap: 6px; } .gallery-dialog { padding: 12px; } .gallery-panel { max-height: calc(100vh - 24px); max-width: calc(100vw - 24px); } .gallery-stage { padding: 16px 50px; } .gallery-arrow { height: 38px; width: 35px; } .gallery-arrow.previous { left: 8px; } .gallery-arrow.next { right: 8px; } }
 @media (max-width: 430px) { h1 { font-size: 2.25rem; } .intro-actions, .activity-actions { align-items: stretch; flex-direction: column; } .intro-actions button, .activity-actions button { width: 100%; } .unit-meta { gap: 6px; } }
 @media (max-width: 780px) { .unit-activity-card { align-items: flex-start; flex-direction: column; gap: 18px; } .activity-access-panel dl { grid-template-columns: 1fr; } }
 @media (max-width: 620px) { .import-steps { grid-template-columns: repeat(2, 1fr); } .import-summary, .import-summary.source-summary, .credential-card dl { grid-template-columns: 1fr; } .import-panel-heading, .finish-delivery { align-items: stretch; flex-direction: column; } .status-pill { align-self: flex-start; } .credential-actions { flex-direction: column; } .credential-actions button { width: 100%; } }
