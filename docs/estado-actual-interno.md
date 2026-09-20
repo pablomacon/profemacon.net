@@ -1,6 +1,6 @@
 # Estado interno de Profe Macón 2.0
 
-Última actualización: 19 de septiembre de 2026.
+Última actualización: 20 de septiembre de 2026.
 
 Este documento es la memoria operativa del proyecto. Describe qué existe, qué funciona realmente, qué decisiones ya fueron tomadas y cuál es el orden recomendado para continuar. No contiene credenciales ni datos personales reales y, por decisión del responsable, todavía no está enlazado desde el `README.md`.
 
@@ -173,6 +173,8 @@ La interfaz `/ingresar` permite alternar entre ingreso y primera activación. Cu
 
 La Unidad 0 de Programación I contiene material de introducción a informática, computadora, CPU, memoria, software, algoritmos, lenguajes, Java y JVM. Incluye Markdown, diagramas Mermaid, galería y actividad formativa en React.
 
+La actividad histórica de esta unidad tenía respuestas expuestas en el componente React y en el Markdown empaquetado. Se retiraron la autocorrección local, los marcadores y las soluciones; la compilación actual ya no los contiene. Como estuvieron versionados, esas preguntas se consideran comprometidas y no deben reutilizarse como evaluación cuya seguridad dependa de una corrección confidencial. La pantalla conserva únicamente un aviso claro de material formativo en revisión.
+
 Sus archivos actuales están bajo:
 
 - `content/programacion-i/unidad-0/`;
@@ -221,6 +223,14 @@ La migración `0002_actividades_autocorregibles.sql` implementa:
 - calificaciones confirmadas por docentes.
 
 La calificación de carnet no se genera automáticamente al resolver una actividad. Se conserva como decisión explícita del docente.
+
+La migración `0007_actividad_entrega_segura.sql` establece la base segura de las entregas. Los intentos nuevos nacen exclusivamente `en_progreso`; tanto `en_progreso` como `enviado` reservan o consumen cupo y `anulado` no. `numero_intento` conserva la secuencia histórica, mientras que `ordinal_efectivo` representa el intento pedagógico visible y puede reutilizarse después de una anulación. Las únicas transiciones actuales son `en_progreso → enviado` y `en_progreso → anulado`; los intentos enviados y anulados son inmutables, al igual que las respuestas de un intento cerrado.
+
+`submission_id` aporta idempotencia por usuario y actividad. D1 comprueba actividad, habilitación, inscripción, rol, ventana temporal y cantidad de intentos dentro de la escritura, e impide superar `maximo_intentos` incluso bajo concurrencia. Al cerrar un intento valida que estén todas y sólo las respuestas de la actividad, y que puntajes, total y porcentaje sean coherentes. Las fechas académicas se almacenan e interpretan en UTC mediante las funciones temporales de SQLite.
+
+`worker/activity-grading.ts` valida estrictamente claves, compatibilidad de tipos, respuestas checkbox y puntajes finitos, enteros seguros y positivos. Tiene pruebas unitarias con datos ficticios. Una barrera automatizada revisa archivos indexados y candidatos a Git para evitar incorporar claves privadas, incluso si se intenta forzar un archivo ignorado.
+
+La revisión completa utilizará un endpoint separado y todavía no está implementada. Sólo se habilitará según la política acordada y contará intentos `enviado`; el futuro POST de entrega nunca devolverá respuestas correctas, valores aceptados, opciones correctas ni la estructura de la clave.
 
 ### 7.1. Piloto de Variables en Java
 
@@ -283,7 +293,8 @@ La implementación actual superó las siguientes comprobaciones:
 - respuesta `403` ante un origen ajeno en una operación de autenticación;
 - ausencia de sesiones activas al terminar las pruebas;
 - `git diff --check` sin errores de espacios;
-- 15 pruebas automatizadas aprobadas, incluidas criptografía, normalización, HMAC documental, nombres de usuario, validación del lote y entrega de activaciones;
+- 29 pruebas automatizadas aprobadas, incluidas criptografía, importación, activaciones, corrector de actividades y barrera contra claves privadas;
+- migraciones completas aplicadas sobre una D1 local limpia y pruebas de persistencia aprobadas, incluida una competencia simultánea donde D1 acepta un solo cupo y rechaza el otro por `maximo_intentos`;
 - build de producción aprobado con los endpoints de previsualización y aplicación;
 - recorrido HTTP ficticio aprobado: autenticación docente, previsualización, aplicación, devolución única de activación, rechazo del lote repetido y cierre de sesión.
 
@@ -314,6 +325,7 @@ No se deben introducir datos personales reales en semillas, fixtures, Markdown, 
 
 ## 11. Deuda técnica conocida
 
+- Las preguntas y respuestas históricas de la Actividad 0 estuvieron versionadas y deben considerarse comprometidas. La autocorrección y las soluciones fueron retiradas del bundle actual, pero esas preguntas no deben reutilizarse como actividad evaluativa cuya seguridad dependa de mantener oculta la corrección.
 - Las rutas internas estáticas de las unidades todavía no están protegidas por pertenencia al catálogo; fue una decisión consciente fuera del alcance del Hito 3.
 - Los contenidos no están filtrados por publicación/grupo.
 - El corrector de actividades está desconectado.
@@ -363,10 +375,13 @@ El orden recomendado es el siguiente.
 
 ### Hito 4 — Actividad 1 completa
 
-- Implementar consulta segura de actividad.
-- Implementar entrega, corrección y persistencia transaccional.
-- Aplicar habilitación, fechas e intentos.
-- Mostrar devolución y mejor resultado.
+- Completado: sanear la Actividad 0 histórica y retirar sus respuestas del bundle actual.
+- Completado: crear el corrector estricto, la migración de entregas seguras y sus pruebas unitarias y locales contra D1.
+- Siguiente: implementar GET seguro de actividad.
+- Después: implementar POST idempotente de intento, sin devolver respuestas correctas.
+- Después: implementar GET separado de revisión final.
+- Después: construir el frontend funcional de la actividad.
+- Pendiente: mostrar devolución y mejor resultado dentro de esos flujos.
 - Verificar las claves contra Neon antes de cualquier piloto real.
 
 ### Hito 5 — Panel docente mínimo
@@ -387,6 +402,6 @@ El orden recomendado es el siguiente.
 
 ## 13. Próximo trabajo concreto
 
-El próximo frente técnico antes de usar datos reales es preparar la configuración remota de `DOCUMENT_HMAC_KEY`. El siguiente frente funcional es el **Hito 4 — Actividad 1 completa**: consulta segura, entrega, corrección y persistencia transaccional de la actividad.
+El próximo frente técnico antes de usar datos reales es preparar la configuración remota de `DOCUMENT_HMAC_KEY`. El siguiente bloque funcional del **Hito 4 — Actividad 1 completa** seguirá este orden: GET seguro de actividad, POST idempotente de intento, GET separado de revisión final y, después, frontend funcional.
 
 Hasta configurar y custodiar el secreto remoto no deben importarse cuentas reales. El portafolio de 2025 se mantiene únicamente como archivo de validación y no está mapeado a ningún grupo de D1.

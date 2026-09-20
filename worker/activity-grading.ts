@@ -25,17 +25,63 @@ type CorrectionKey = {
 };
 
 const normalizeText = (value: unknown) => typeof value === "string" ? value.trim() : "";
-const normalizedSelection = (value: unknown) => Array.isArray(value) ? [...new Set(value.map(normalizeText).filter(Boolean))].sort() : [];
+const normalizedSelection = (value: unknown): string[] | null => {
+  if (!Array.isArray(value) || !value.every((item) => typeof item === "string" && item.trim().length > 0)) return null;
+  const normalized = value.map((item) => item.trim());
+  if (new Set(normalized).size !== normalized.length) return null;
+  return normalized.sort();
+};
 const sameList = (left: string[], right: string[]) => left.length === right.length && left.every((item, index) => item === right[index]);
 
+function correctionKeyFor(question: ActivityQuestionForGrading): CorrectionKey {
+  if (!question.claveCorreccionJson) {
+    throw new Error(`La pregunta ${question.numero} no tiene una clave privada de corrección.`);
+  }
+
+  let candidate: unknown;
+  try {
+    candidate = JSON.parse(question.claveCorreccionJson);
+  } catch {
+    throw new Error(`La pregunta ${question.numero} tiene una clave privada de corrección inválida.`);
+  }
+
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+    throw new Error(`La pregunta ${question.numero} tiene una clave privada de corrección inválida.`);
+  }
+
+  const key = candidate as Partial<CorrectionKey>;
+  const nonEmptyStrings = (values: unknown): values is string[] => Array.isArray(values)
+    && values.length > 0
+    && values.every((value) => typeof value === "string" && value.length > 0 && value === value.trim());
+
+  const valid = question.tipo === "radio"
+    ? key.modo === "opcion" && nonEmptyStrings(key.correctas) && key.correctas.length === 1
+    : question.tipo === "checkbox"
+      ? key.modo === "seleccion-exacta" && nonEmptyStrings(key.correctas) && new Set(key.correctas).size === key.correctas.length
+      : question.tipo === "text"
+        ? key.modo === "texto-exacto" && nonEmptyStrings(key.aceptadas)
+        : false;
+
+  if (!valid) {
+    throw new Error(`La pregunta ${question.numero} combina un tipo y una clave de corrección incompatibles.`);
+  }
+
+  return key as CorrectionKey;
+}
+
 export function gradeActivity(questions: ActivityQuestionForGrading[], answers: Record<string, unknown>) {
+  if (questions.length === 0) throw new Error("La actividad no contiene preguntas para corregir.");
+
   const gradedAnswers: GradedAnswer[] = questions.map((question) => {
-    if (!question.claveCorreccionJson) throw new Error(`La pregunta ${question.numero} no tiene una clave privada de corrección.`);
-    const key = JSON.parse(question.claveCorreccionJson) as CorrectionKey;
+    if (!Number.isSafeInteger(question.puntaje) || question.puntaje <= 0) {
+      throw new Error(`La pregunta ${question.numero} tiene un puntaje inválido.`);
+    }
+    const key = correctionKeyFor(question);
     const answer = answers[String(question.numero)];
-    const normalized = question.tipo === "checkbox" ? normalizedSelection(answer) : normalizeText(answer);
+    const selection = question.tipo === "checkbox" ? normalizedSelection(answer) : null;
+    const normalized = question.tipo === "checkbox" ? selection : normalizeText(answer);
     const correct = key.modo === "seleccion-exacta"
-      ? sameList(normalizedSelection(answer), [...(key.correctas ?? [])].sort())
+      ? selection !== null && sameList(selection, [...(key.correctas ?? [])].sort())
       : key.modo === "texto-exacto"
         ? (key.aceptadas ?? []).includes(normalizeText(answer))
         : (key.correctas ?? []).includes(normalizeText(answer));
@@ -53,5 +99,8 @@ export function gradeActivity(questions: ActivityQuestionForGrading[], answers: 
 
   const score = gradedAnswers.reduce((total, answer) => total + answer.puntajeObtenido, 0);
   const total = questions.reduce((sum, question) => sum + question.puntaje, 0);
+  if (!Number.isSafeInteger(total) || total <= 0 || !Number.isSafeInteger(score)) {
+    throw new Error("La actividad tiene un puntaje total inválido.");
+  }
   return { gradedAnswers, score, total, percentage: Math.round((score / total) * 100) };
 }
