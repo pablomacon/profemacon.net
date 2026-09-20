@@ -146,7 +146,8 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
       (15, 'actividad-aislada', 1, 'unidad-1', 'tema', 15, 'Actividad aislada', '', 'activa', 1, 1),
       (16, 'actividad-reintento-cierre', 1, 'unidad-1', 'tema', 16, 'Reintento tras cierre', '', 'activa', 1, 2),
       (17, 'actividad-reintento-deshabilitada', 1, 'unidad-1', 'tema', 17, 'Reintento tras deshabilitar', '', 'activa', 1, 2),
-      (18, 'actividad-respuestas', 1, 'unidad-1', 'tema', 18, 'Actividad de respuestas', '', 'activa', 2, 1);
+      (18, 'actividad-respuestas', 1, 'unidad-1', 'tema', 18, 'Actividad de respuestas', '', 'activa', 2, 1),
+      (19, 'actividad-submit', 1, 'unidad-1', 'tema', 19, 'Actividad de entrega', '', 'activa', 3, 2);
     INSERT INTO habilitaciones_actividad
       (id, actividad_id, grupo_id, habilitada, disponible_desde, disponible_hasta)
     VALUES
@@ -158,7 +159,8 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
       (12, 10, 1, 0, '2099-01-01T00:00:00Z', NULL), (13, 11, 1, 1, NULL, NULL),
       (14, 12, 1, 1, NULL, NULL), (15, 13, 1, 1, datetime('now'), NULL),
       (16, 14, 1, 1, NULL, datetime('now')), (17, 15, 1, 1, NULL, NULL),
-      (18, 16, 1, 1, NULL, NULL), (19, 17, 1, 1, NULL, NULL), (20, 18, 1, 1, NULL, NULL);
+      (18, 16, 1, 1, NULL, NULL), (19, 17, 1, 1, NULL, NULL), (20, 18, 1, 1, NULL, NULL),
+      (21, 19, 1, 1, NULL, NULL);
     INSERT INTO preguntas_actividad
       (id, actividad_id, numero, tipo, enunciado, instrucciones, opciones_json, recursos_json, placeholder, puntaje, clave_correccion_json, retroalimentacion_correcta, retroalimentacion_incorrecta)
     VALUES
@@ -171,7 +173,10 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
       (7, 11, 1, 'radio', 'Pregunta deshabilitada agotada', '', '[]', '[]', NULL, 1, '["x"]', '', ''),
       (8, 12, 1, 'radio', 'Pregunta futura agotada', '', '[]', '[]', NULL, 1, '["x"]', '', ''),
       (9, 18, 1, 'radio', 'Primera respuesta', '', '[]', '[]', NULL, 1, '["x"]', '', ''),
-      (10, 18, 2, 'text', 'Segunda respuesta', '', '[]', '[]', NULL, 1, '["x"]', '', '');
+      (10, 18, 2, 'text', 'Segunda respuesta', '', '[]', '[]', NULL, 1, '["x"]', '', ''),
+      (11, 19, 1, 'radio', 'Radio de entrega', '', '[]', '[]', NULL, 1, '{"modo":"opcion","correctas":["b"]}', 'Feedback privado correcto', 'Feedback privado incorrecto'),
+      (12, 19, 2, 'text', 'Texto de entrega', '', '[]', '[]', NULL, 1, '{"modo":"texto-exacto","aceptadas":["valor"]}', 'Feedback privado correcto', 'Feedback privado incorrecto'),
+      (13, 19, 3, 'checkbox', 'Checkbox de entrega', '', '[]', '[]', NULL, 1, '{"modo":"seleccion-exacta","correctas":["a","c"]}', 'Feedback privado correcto', 'Feedback privado incorrecto');
   `);
   const sentAttemptId = insertAttempt(database, 6, 8, 1, 1, 1, "agotada-uno");
   database.exec(`
@@ -277,6 +282,14 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
+    });
+    return { response, body: await response.json() };
+  };
+  const submit = async (slug, attemptId, groupCode = null, token = studentToken) => {
+    const suffix = groupCode ? `?groupCode=${encodeURIComponent(groupCode)}` : "";
+    const response = await fetch(`${baseUrl}/api/me/activities/${slug}/attempts/${attemptId}/submit${suffix}`, {
+      method: "POST",
+      headers: { Cookie: `pm_session=${token}`, Origin: baseUrl },
     });
     return { response, body: await response.json() };
   };
@@ -559,6 +572,102 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
   const otherActivity = await postAttempt("actividad-en-progreso", { submissionId: "inicio-uno" });
   assert.equal(otherActivity.response.status, 201);
   assert.equal(otherActivity.body.attempt.number, 3);
+
+  const anonymousSubmit = await fetch(`${baseUrl}/api/me/activities/actividad-submit/attempts/1/submit`, {
+    method: "POST",
+    headers: { Origin: baseUrl },
+  });
+  assert.equal(anonymousSubmit.status, 401);
+  assert.equal(anonymousSubmit.headers.get("Cache-Control"), "no-store");
+  assert.equal((await anonymousSubmit.json()).code, "SESSION_REQUIRED");
+
+  const submitDraft = await postAttempt("actividad-submit", { submissionId: "entrega-completa" });
+  assert.equal(submitDraft.response.status, 201);
+  const incompleteSubmit = await submit("actividad-submit", submitDraft.body.attempt.id);
+  assert.equal(incompleteSubmit.response.status, 409);
+  assert.equal(incompleteSubmit.body.code, "ATTEMPT_INCOMPLETE");
+  const teacherSubmit = await submit("actividad-submit", submitDraft.body.attempt.id, null, teacherToken);
+  assert.equal(teacherSubmit.response.status, 403);
+  assert.equal(teacherSubmit.body.code, "STUDENT_ROLE_REQUIRED");
+  const foreignSubmit = await submit("actividad-submit", submitDraft.body.attempt.id, null, otherStudentToken);
+  assert.equal(foreignSubmit.response.status, 404);
+  assert.equal(foreignSubmit.body.code, "ATTEMPT_NOT_FOUND");
+  const missingSubmit = await submit("actividad-submit", 999999);
+  assert.equal(missingSubmit.response.status, 404);
+  assert.equal(missingSubmit.body.code, "ATTEMPT_NOT_FOUND");
+  assert.equal((await putAnswer("actividad-submit", submitDraft.body.attempt.id, 1, { answer: "b" })).response.status, 200);
+  assert.equal((await putAnswer("actividad-submit", submitDraft.body.attempt.id, 2, { answer: " valor " })).response.status, 200);
+  assert.equal((await putAnswer("actividad-submit", submitDraft.body.attempt.id, 3, { answer: ["c", "a"] })).response.status, 200);
+  const concurrentSubmit = await Promise.all([
+    submit("actividad-submit", submitDraft.body.attempt.id),
+    submit("actividad-submit", submitDraft.body.attempt.id),
+  ]);
+  assert.deepEqual(concurrentSubmit.map(({ response }) => response.status), [200, 200]);
+  assert.deepEqual(concurrentSubmit[0].body, concurrentSubmit[1].body, "dos submit concurrentes recuperan el mismo cierre");
+  const submitted = concurrentSubmit[0];
+  assert.equal(submitted.response.status, 200);
+  assert.equal(submitted.response.headers.get("Cache-Control"), "no-store");
+  assert.deepEqual(submitted.body.attempt, {
+    id: submitDraft.body.attempt.id,
+    state: "enviado",
+    number: 1,
+    ordinal: 1,
+    score: 3,
+    total: 3,
+    percentage: 100,
+    judgment: "logrado",
+    submittedAt: submitted.body.attempt.submittedAt,
+  });
+  assert.equal(typeof submitted.body.attempt.submittedAt, "string");
+  assert.deepEqual(submitted.body.answers, [
+    { number: 1, correct: true, score: 1 },
+    { number: 2, correct: true, score: 1 },
+    { number: 3, correct: true, score: 1 },
+  ]);
+  assert.equal(submitted.body.attempts.used, 1);
+  assert.equal(submitted.body.attempts.remaining, 1);
+  assert.equal(submitted.body.reviewAvailable, false);
+  const submittedJson = JSON.stringify(submitted.body);
+  for (const forbidden of ["clave_correccion", "correctAnswer", "correctas", "aceptadas", "explicacion_revision_final", "retroalimentacion", "modo"]) {
+    assert.equal(submittedJson.includes(forbidden), false, `submit no debe incluir ${forbidden}`);
+  }
+  const persistedSubmit = new DatabaseSync(databasePath);
+  const submittedRows = persistedSubmit.prepare(`
+    SELECT correcta AS correct, puntaje_obtenido AS score, respuesta_normalizada_json AS normalized
+    FROM respuestas_intento_actividad WHERE intento_id = ?1 ORDER BY numero_pregunta
+  `).all(submitDraft.body.attempt.id);
+  assert.deepEqual(submittedRows.map((row) => ({ ...row })), [
+    { correct: 1, score: 1, normalized: '"b"' },
+    { correct: 1, score: 1, normalized: '"valor"' },
+    { correct: 1, score: 1, normalized: '["a","c"]' },
+  ]);
+  persistedSubmit.exec("UPDATE preguntas_actividad SET clave_correccion_json = '{\"modo\":\"opcion\",\"correctas\":[\"a\"]}' WHERE id = 11");
+  persistedSubmit.close();
+  const retrySubmit = await submit("actividad-submit", submitDraft.body.attempt.id);
+  assert.equal(retrySubmit.response.status, 200);
+  assert.deepEqual(retrySubmit.body, submitted.body, "submit repetido devuelve el resultado persistido sin recalificar");
+  const editAfterSubmit = await putAnswer("actividad-submit", submitDraft.body.attempt.id, 1, { answer: "a" });
+  assert.equal(editAfterSubmit.response.status, 409);
+  assert.equal(editAfterSubmit.body.code, "ATTEMPT_NOT_EDITABLE");
+  const anuladoSubmit = await submit("actividad-anulada", annulledAttemptId);
+  assert.equal(anuladoSubmit.response.status, 409);
+  assert.equal(anuladoSubmit.body.code, "ATTEMPT_NOT_FINALIZABLE");
+
+  const secondSubmitDraft = await postAttempt("actividad-submit", { submissionId: "entrega-segunda" });
+  assert.equal(secondSubmitDraft.response.status, 201);
+  assert.equal((await putAnswer("actividad-submit", secondSubmitDraft.body.attempt.id, 1, { answer: "b" })).response.status, 200);
+  assert.equal((await putAnswer("actividad-submit", secondSubmitDraft.body.attempt.id, 2, { answer: "otro" })).response.status, 200);
+  assert.equal((await putAnswer("actividad-submit", secondSubmitDraft.body.attempt.id, 3, { answer: ["a"] })).response.status, 200);
+  const secondSubmitted = await submit("actividad-submit", secondSubmitDraft.body.attempt.id);
+  assert.equal(secondSubmitted.response.status, 200);
+  assert.equal(secondSubmitted.body.attempt.score, 0);
+  assert.equal(secondSubmitted.body.attempt.percentage, 0);
+  assert.equal(secondSubmitted.body.attempt.judgment, "inicial");
+  assert.equal(secondSubmitted.body.attempts.used, 2);
+  assert.equal(secondSubmitted.body.attempts.remaining, 0);
+  assert.equal(secondSubmitted.body.reviewAvailable, true);
+  assert.equal(secondSubmitted.body.attempts.best.id, undefined);
+  assert.equal(secondSubmitted.body.attempts.best.score, 3);
 
   const concurrent = await Promise.all([
     postAttempt("actividad-en-progreso", { submissionId: "concurrente-a" }),

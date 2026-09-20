@@ -50,6 +50,10 @@ La rama activa es `main`. Los checkpoints funcionales enviados a `origin/main` i
 - `5c2ab4e`: asistente de importación estudiantil;
 - `7ed3c6a`: actualización del estado interno.
 - `265301a`: instalación de Playwright para pruebas visuales.
+- `8e09d99`: base segura de intentos de actividad.
+- `349fd6c`: creación idempotente de intentos estudiantiles.
+- `cce5d51`: guardado de respuestas en borrador.
+- `d6f8ab9`: snapshots inmutables de preguntas por intento.
 
 El bloque de pruebas visuales y de navegador se mantiene separado para que sus referencias gráficas puedan revisarse en Git.
 
@@ -228,6 +232,18 @@ La migración `0007_actividad_entrega_segura.sql` establece la base segura de la
 
 `submission_id` aporta idempotencia por usuario y actividad. D1 comprueba actividad, habilitación, inscripción, rol, ventana temporal y cantidad de intentos dentro de la escritura, e impide superar `maximo_intentos` incluso bajo concurrencia. Al cerrar un intento valida que estén todas y sólo las respuestas de la actividad, y que puntajes, total y porcentaje sean coherentes. Las fechas académicas se almacenan e interpretan en UTC mediante las funciones temporales de SQLite.
 
+El endpoint `GET /api/me/activities/:slug` devuelve sólo la vista pública de una actividad habilitada para el estudiante y su grupo seleccionado de forma determinista. Informa los estados `available`, `not_open`, `closed`, `disabled` y `no_attempts`, el resumen acotado de intentos y el mejor intento enviado, sin consultas ni campos que expongan claves, respuestas correctas, criterios o retroalimentación privada. Sus respuestas usan `Cache-Control: no-store`.
+
+`POST /api/me/activities/:slug/attempts` crea o recupera un intento mediante `submissionId` y un `groupCode` cuando es necesario desambiguar el grupo. La recuperación idempotente ocurre antes de volver a comprobar disponibilidad, por lo que un reintento del mismo contexto sigue recuperando su borrador aunque la actividad se cierre o deshabilite después. Para un identificador nuevo se mantienen las validaciones de disponibilidad y las invariantes de D1.
+
+`PUT /api/me/activities/:slug/attempts/:attemptId/responses/:questionNumber` guarda o actualiza una respuesta únicamente en un intento propio `en_progreso`. Valida usuario, rol, matrícula, grupo, actividad, habilitación, intento y pregunta; no expone información privada y rechaza intentos enviados o anulados.
+
+`POST /api/me/activities/:slug/attempts/:attemptId/submit` finaliza un borrador propio con cuerpo vacío. Corrige sólo a partir de snapshots privados y respuestas persistidas, exige que todas las preguntas tengan respuesta y actualiza atómicamente respuestas normalizadas, corrección, puntajes, porcentaje, juicio, fecha y estado `enviado`. Un reintento —incluso concurrente— de un intento ya enviado devuelve el resultado ya persistido sin volver a corregir. La respuesta pública incluye sólo puntajes, juicio, intento, resumen de cupos, mejor resultado, puntos y correcto/incorrecto por pregunta; nunca claves, respuestas correctas, modos de corrección, feedback privado ni revisión final.
+
+El juicio actual se calcula con los umbrales de la actividad: antes de aprobación es `inicial`, desde aprobación y antes del umbral destacado es `en_proceso`, y desde éste es `logrado`. `reviewAvailable` es verdadero únicamente cuando la actividad permite revisión y el estudiante ya consumió todos sus intentos enviados. La revisión completa sigue siendo un endpoint separado.
+
+La migración `0008_snapshots_preguntas_intento.sql` incorpora `preguntas_intento_actividad`: cada intento nuevo recibe atómicamente un snapshot inmutable de sus preguntas, incluidos enunciado, tipo, puntaje máximo y clave privada. La retroalimentación textual no integra el snapshot actual y `submit` no consulta ni devuelve la de la pregunta original. Las respuestas y los cierres se validan contra el snapshot, no contra preguntas que pudieran editarse luego. Los borradores existentes de esta beta se rellenan desde las preguntas actuales; no se fabrican snapshots para intentos históricos enviados o anulados.
+
 `worker/activity-grading.ts` valida estrictamente claves, compatibilidad de tipos, respuestas checkbox y puntajes finitos, enteros seguros y positivos. Tiene pruebas unitarias con datos ficticios. Una barrera automatizada revisa archivos indexados y candidatos a Git para evitar incorporar claves privadas, incluso si se intenta forzar un archivo ignorado.
 
 La revisión completa utilizará un endpoint separado y todavía no está implementada. Sólo se habilitará según la política acordada y contará intentos `enviado`; el futuro POST de entrega nunca devolverá respuestas correctas, valores aceptados, opciones correctas ni la estructura de la clave.
@@ -246,7 +262,7 @@ Existe un piloto local con:
 
 Los enunciados y opciones se encuentran en `seed/actividades/`. Las claves privadas están en `private/`, carpeta ignorada por Git. Las doce claves están cargadas en la D1 local, pero todavía deben verificarse contra la base Neon original antes de publicar.
 
-`worker/activity-grading.ts` contiene el corrector, pero todavía no es llamado por ningún endpoint. La pantalla de la actividad sólo explica su estado y no muestra preguntas.
+`worker/activity-grading.ts` se usa al finalizar un intento y recibe sólo snapshots privados y respuestas guardadas. La pantalla de la actividad todavía sólo explica su estado y no muestra preguntas.
 
 Falta implementar el circuito transaccional:
 
@@ -262,7 +278,7 @@ Falta implementar el circuito transaccional:
 
 ## 8. Estado de la D1 local
 
-Las migraciones `0001` a `0006` están aplicadas localmente. La semilla aporta dos perfiles, una asignatura y un grupo de demostración; las pruebas de integración agregan una tercera cuenta y lotes, activaciones y eventos de auditoría exclusivamente ficticios. Esas cantidades pueden aumentar al repetir las comprobaciones y no deben tratarse como datos de referencia. Cada recorrido cierra su sesión al terminar.
+Las migraciones `0001` a `0008` están disponibles y se verifican sobre D1 local limpia. La semilla aporta dos perfiles, una asignatura y un grupo de demostración; las pruebas de integración agregan una tercera cuenta y lotes, activaciones y eventos de auditoría exclusivamente ficticios. Esas cantidades pueden aumentar al repetir las comprobaciones y no deben tratarse como datos de referencia. Cada recorrido cierra su sesión al terminar.
 
 También están cargados localmente una actividad con 12 preguntas y sus claves privadas de corrección, una habilitación y un contenido versionado publicado. No existen intentos académicos reales y nunca se aplicó el portafolio real de referencia.
 
@@ -293,7 +309,7 @@ La implementación actual superó las siguientes comprobaciones:
 - respuesta `403` ante un origen ajeno en una operación de autenticación;
 - ausencia de sesiones activas al terminar las pruebas;
 - `git diff --check` sin errores de espacios;
-- 29 pruebas automatizadas aprobadas, incluidas criptografía, importación, activaciones, corrector de actividades y barrera contra claves privadas;
+- 30 pruebas automatizadas aprobadas, incluidas criptografía, importación, activaciones, corrector de actividades y barrera contra claves privadas;
 - migraciones completas aplicadas sobre una D1 local limpia y pruebas de persistencia aprobadas, incluida una competencia simultánea donde D1 acepta un solo cupo y rechaza el otro por `maximo_intentos`;
 - build de producción aprobado con los endpoints de previsualización y aplicación;
 - recorrido HTTP ficticio aprobado: autenticación docente, previsualización, aplicación, devolución única de activación, rechazo del lote repetido y cierre de sesión.
@@ -303,6 +319,8 @@ El portafolio real de referencia continúa produciendo una previsualización agr
 `tests/e2e/my-courses.spec.ts` cubre el catálogo autenticado, los estados de sesión, roles, contenido conocido y desconocido, errores, reintentos y ausencia de desbordamiento. Sus 17 escenarios pasan en escritorio y móvil: 34 casos aprobados. Las seis diferencias visuales preexistentes del resto de Playwright continúan pendientes de revisión y sus snapshots no fueron actualizados. Las capturas existentes contienen sólo estados e identidades ficticias; la prueba con el portafolio real no genera captura, traza ni video.
 
 La integración local contra D1 reemitió dos códigos sucesivos para una cuenta ficticia, comprobó que el primero fuese rechazado inmediatamente después de la segunda emisión y confirmó que una cuenta con contraseña ya no admite reemisión. La salida de la prueba contiene sólo contadores y estados agregados.
+
+`tests/student-activity.test.mjs` verifica con Worker y D1 local el GET seguro, la creación y recuperación idempotente de borradores, el guardado de respuestas, el aislamiento por usuario, grupo, actividad y habilitación, y la persistencia de snapshots sin campos privados en las respuestas públicas.
 
 ## 10. Seguridad y privacidad pendientes
 
@@ -328,7 +346,7 @@ No se deben introducir datos personales reales en semillas, fixtures, Markdown, 
 - Las preguntas y respuestas históricas de la Actividad 0 estuvieron versionadas y deben considerarse comprometidas. La autocorrección y las soluciones fueron retiradas del bundle actual, pero esas preguntas no deben reutilizarse como actividad evaluativa cuya seguridad dependa de mantener oculta la corrección.
 - Las rutas internas estáticas de las unidades todavía no están protegidas por pertenencia al catálogo; fue una decisión consciente fuera del alcance del Hito 3.
 - Los contenidos no están filtrados por publicación/grupo.
-- El corrector de actividades está desconectado.
+- Falta el endpoint separado de revisión final y el frontend funcional de actividades.
 - No hay flujo de restablecimiento de contraseña.
 - El importador tiene API, pantalla administrativa y cobertura de navegador para el estado inicial y la entrega individual; falta una prueba de integración real de todas las etapas contra D1.
 - No hay panel docente ni de practicante funcional.
@@ -377,8 +395,10 @@ El orden recomendado es el siguiente.
 
 - Completado: sanear la Actividad 0 histórica y retirar sus respuestas del bundle actual.
 - Completado: crear el corrector estricto, la migración de entregas seguras y sus pruebas unitarias y locales contra D1.
-- Siguiente: implementar GET seguro de actividad.
-- Después: implementar POST idempotente de intento, sin devolver respuestas correctas.
+- Completado: implementar GET seguro de actividad, sin información privada.
+- Completado: implementar la creación y recuperación idempotente del intento y el guardado de respuestas en borrador.
+- Completado: persistir snapshots inmutables de preguntas por intento.
+- Completado: implementar `submit` idempotente, con autocorrección desde snapshots y persistencia atómica sin devolver respuestas correctas.
 - Después: implementar GET separado de revisión final.
 - Después: construir el frontend funcional de la actividad.
 - Pendiente: mostrar devolución y mejor resultado dentro de esos flujos.
@@ -402,6 +422,6 @@ El orden recomendado es el siguiente.
 
 ## 13. Próximo trabajo concreto
 
-El próximo frente técnico antes de usar datos reales es preparar la configuración remota de `DOCUMENT_HMAC_KEY`. El siguiente bloque funcional del **Hito 4 — Actividad 1 completa** seguirá este orden: GET seguro de actividad, POST idempotente de intento, GET separado de revisión final y, después, frontend funcional.
+El próximo frente técnico antes de usar datos reales es preparar la configuración remota de `DOCUMENT_HMAC_KEY`. El siguiente bloque funcional del **Hito 4 — Actividad 1 completa** es GET separado de revisión final, limitado por la política de revisión de la actividad. Después seguirá el frontend funcional.
 
 Hasta configurar y custodiar el secreto remoto no deben importarse cuentas reales. El portafolio de 2025 se mantiene únicamente como archivo de validación y no está mapeado a ningún grupo de D1.

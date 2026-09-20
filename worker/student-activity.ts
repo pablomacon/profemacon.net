@@ -1,4 +1,5 @@
 import { listUserRoles } from "./auth";
+import { gradeActivity, type ActivityQuestionForGrading } from "./activity-grading";
 
 type ActivityRow = {
   id: number;
@@ -59,6 +60,8 @@ export class StudentActivityError extends Error {
       | "ACTIVITY_UNAVAILABLE"
       | "ATTEMPT_NOT_FOUND"
       | "ATTEMPT_NOT_EDITABLE"
+      | "ATTEMPT_NOT_FINALIZABLE"
+      | "ATTEMPT_INCOMPLETE"
       | "QUESTION_NOT_FOUND"
       | "INVALID_ANSWER",
     message: string,
@@ -83,6 +86,14 @@ type ActivityQuestionRow = {
   number: number;
   type: "radio" | "checkbox" | "text" | "ordenar" | "relacionar";
   prompt: string;
+};
+
+type SnapshotQuestionForSubmit = ActivityQuestionForGrading;
+
+type SavedAnswerRow = {
+  questionId: number;
+  questionNumber: number;
+  answerJson: string;
 };
 
 function jsonArray(value: string): unknown[] {
@@ -508,4 +519,224 @@ export async function saveStudentActivityAnswer(
     question: { number: question.number, type: question.type },
     saved: true,
   };
+}
+
+function judgmentFor(percentage: number, activity: ActivityRow): "inicial" | "en_proceso" | "logrado" {
+  if (percentage < activity.approvalThreshold) return "inicial";
+  if (percentage < activity.achievementThreshold) return "en_proceso";
+  return "logrado";
+}
+
+function parseStoredAnswer(value: string, questionNumber: number): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    throw new StudentActivityError(409, "ATTEMPT_NOT_FINALIZABLE", `La respuesta de la pregunta ${questionNumber} no es válida.`);
+  }
+}
+
+async function findSubmitAttempt(
+  db: D1Database,
+  attemptId: number,
+  userId: number,
+  activityId: number,
+  habilitationId: number,
+) {
+  return db.prepare(`
+    SELECT
+      i.id,
+      i.estado AS state,
+      i.numero_intento AS number,
+      i.ordinal_efectivo AS ordinal,
+      i.puntaje_obtenido AS score,
+      i.puntaje_total AS total,
+      i.porcentaje AS percentage,
+      i.juicio AS judgment,
+      i.enviado_en AS submittedAt
+    FROM intentos_actividad i
+    WHERE i.id = ?1
+      AND i.usuario_id = ?2
+      AND i.actividad_id = ?3
+      AND i.habilitacion_id = ?4
+    LIMIT 1
+  `).bind(attemptId, userId, activityId, habilitationId).first<{
+    id: number;
+    state: AttemptRow["state"];
+    number: number;
+    ordinal: number | null;
+    score: number;
+    total: number;
+    percentage: number;
+    judgment: "inicial" | "en_proceso" | "logrado";
+    submittedAt: string;
+  }>();
+}
+
+async function loadSnapshotForSubmit(db: D1Database, attemptId: number) {
+  const snapshots = await db.prepare(`
+    SELECT
+      p.pregunta_origen_id AS id,
+      p.numero_pregunta AS numero,
+      p.tipo_pregunta AS tipo,
+      p.puntaje_maximo AS puntaje,
+      p.clave_correccion_snapshot_json AS claveCorreccionJson
+    FROM preguntas_intento_actividad p
+    WHERE p.intento_id = ?1
+    ORDER BY p.numero_pregunta
+  `).bind(attemptId).all<SnapshotQuestionForSubmit>();
+  if (snapshots.results.length === 0) {
+    throw new StudentActivityError(409, "ATTEMPT_NOT_FINALIZABLE", "El intento no tiene preguntas para finalizar.");
+  }
+  return snapshots.results.map((snapshot) => ({
+    ...snapshot,
+    // El feedback textual no forma parte del snapshot actual. Por seguridad no
+    // se consulta la pregunta original ni se devuelve texto que pueda revelar la clave.
+    retroalimentacionCorrecta: "",
+    retroalimentacionIncorrecta: "",
+  }));
+}
+
+async function loadSavedAnswers(db: D1Database, attemptId: number) {
+  const answers = await db.prepare(`
+    SELECT
+      r.pregunta_id AS questionId,
+      r.numero_pregunta AS questionNumber,
+      r.respuesta_dada_json AS answerJson
+    FROM respuestas_intento_actividad r
+    WHERE r.intento_id = ?1
+    ORDER BY r.numero_pregunta
+  `).bind(attemptId).all<SavedAnswerRow>();
+  return answers.results;
+}
+
+async function publicSubmittedAttempt(
+  db: D1Database,
+  activity: ActivityRow,
+  access: AccessRow,
+  userId: number,
+  attempt: NonNullable<Awaited<ReturnType<typeof findSubmitAttempt>>>,
+) {
+  const { used, best } = await summarizeAttempts(db, activity.id, access.habilitationId, userId);
+  const answers = await db.prepare(`
+    SELECT numero_pregunta AS number, correcta AS correct, puntaje_obtenido AS score
+    FROM respuestas_intento_actividad
+    WHERE intento_id = ?1
+    ORDER BY numero_pregunta
+  `).bind(attempt.id).all<{ number: number; correct: number; score: number }>();
+  return {
+    attempt: {
+      id: attempt.id,
+      state: attempt.state,
+      number: attempt.number,
+      ordinal: attempt.ordinal,
+      score: attempt.score,
+      total: attempt.total,
+      percentage: attempt.percentage,
+      judgment: attempt.judgment,
+      submittedAt: attempt.submittedAt,
+    },
+    attempts: {
+      used,
+      remaining: Math.max(0, activity.maxAttempts - used),
+      best: best ? {
+        number: best.number,
+        ordinal: best.ordinal,
+        score: best.score,
+        total: best.total,
+        percentage: best.percentage,
+        submittedAt: best.submittedAt,
+      } : null,
+    },
+    answers: answers.results.map((answer) => ({
+      number: answer.number,
+      correct: answer.correct === 1,
+      score: answer.score,
+    })),
+    reviewAvailable: activity.reviewEnabled === 1 && used >= activity.maxAttempts,
+  };
+}
+
+export async function submitStudentActivityAttempt(
+  db: D1Database,
+  userId: number,
+  slug: string,
+  groupCode: string | null,
+  attemptValue: unknown,
+) {
+  const attemptId = validateAttemptId(attemptValue);
+  const { activity, access } = await resolveStudentActivityAccess(db, userId, slug, groupCode);
+  let attempt = await findSubmitAttempt(db, attemptId, userId, activity.id, access.habilitationId);
+  if (!attempt) throw new StudentActivityError(404, "ATTEMPT_NOT_FOUND", "El intento no fue encontrado.");
+  if (attempt.state === "anulado") {
+    throw new StudentActivityError(409, "ATTEMPT_NOT_FINALIZABLE", "El intento anulado no puede finalizarse.");
+  }
+  if (attempt.state === "enviado") return publicSubmittedAttempt(db, activity, access, userId, attempt);
+  const activeAttemptId = attempt.id;
+
+  const snapshots = await loadSnapshotForSubmit(db, activeAttemptId);
+  const savedAnswers = await loadSavedAnswers(db, activeAttemptId);
+  const savedByQuestion = new Map(savedAnswers.map((answer) => [answer.questionId, answer]));
+  const missing = snapshots.filter((question) => !savedByQuestion.has(question.id)).map((question) => question.numero);
+  if (missing.length > 0 || savedAnswers.length !== snapshots.length) {
+    throw new StudentActivityError(409, "ATTEMPT_INCOMPLETE", "El intento tiene respuestas pendientes.");
+  }
+
+  const answers: Record<string, unknown> = {};
+  for (const question of snapshots) {
+    const saved = savedByQuestion.get(question.id);
+    if (!saved || saved.questionNumber !== question.numero) {
+      throw new StudentActivityError(409, "ATTEMPT_NOT_FINALIZABLE", "Las respuestas no coinciden con el snapshot del intento.");
+    }
+    answers[String(question.numero)] = parseStoredAnswer(saved.answerJson, question.numero);
+  }
+
+  let grading: ReturnType<typeof gradeActivity>;
+  try {
+    grading = gradeActivity(snapshots, answers);
+  } catch {
+    throw new StudentActivityError(409, "ATTEMPT_NOT_FINALIZABLE", "El intento no puede corregirse con su configuración actual.");
+  }
+  const judgment = judgmentFor(grading.percentage, activity);
+
+  try {
+    await db.batch([
+      ...grading.gradedAnswers.map((answer) => db.prepare(`
+        UPDATE respuestas_intento_actividad
+        SET respuesta_normalizada_json = ?1,
+            correcta = ?2,
+            puntaje_obtenido = ?3,
+            retroalimentacion = ''
+        WHERE intento_id = ?4 AND pregunta_id = ?5
+      `).bind(
+        JSON.stringify(answer.respuestaNormalizada),
+        answer.correcta ? 1 : 0,
+        answer.puntajeObtenido,
+        activeAttemptId,
+        answer.preguntaId,
+      )),
+      db.prepare(`
+        UPDATE intentos_actividad
+        SET puntaje_obtenido = ?1,
+            puntaje_total = ?2,
+            porcentaje = ?3,
+            juicio = ?4,
+            enviado_en = CURRENT_TIMESTAMP,
+            estado = 'enviado'
+        WHERE id = ?5 AND estado = 'en_progreso'
+      `).bind(grading.score, grading.total, grading.percentage, judgment, activeAttemptId),
+    ]);
+  } catch {
+    const current = await findSubmitAttempt(db, attemptId, userId, activity.id, access.habilitationId);
+    if (current?.state === "enviado") return publicSubmittedAttempt(db, activity, access, userId, current);
+    if (current?.state === "anulado") {
+      throw new StudentActivityError(409, "ATTEMPT_NOT_FINALIZABLE", "El intento anulado no puede finalizarse.");
+    }
+    throw new StudentActivityError(409, "ATTEMPT_NOT_FINALIZABLE", "No fue posible finalizar el intento.");
+  }
+
+  attempt = await findSubmitAttempt(db, attemptId, userId, activity.id, access.habilitationId);
+  if (!attempt || attempt.state !== "enviado") {
+    throw new StudentActivityError(409, "ATTEMPT_NOT_FINALIZABLE", "No fue posible finalizar el intento.");
+  }
+  return publicSubmittedAttempt(db, activity, access, userId, attempt);
 }

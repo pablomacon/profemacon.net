@@ -3,7 +3,7 @@ import { ActivationAdminError, listActivationCandidates, parseReissuePayload, re
 import { listCoursesForUser } from "./course-catalog";
 import { activateLocalAccount, clearSessionCookie, loginLocalAccount, readJsonBody, requestHasValidOrigin, revokeLocalSession, sessionCookie } from "./local-auth";
 import { applyStudentImport, previewStudentImport, readStudentImportBody, StudentImportError } from "./student-import";
-import { createOrRecoverStudentActivityAttempt, getStudentActivity, saveStudentActivityAnswer, StudentActivityError } from "./student-activity";
+import { createOrRecoverStudentActivityAttempt, getStudentActivity, saveStudentActivityAnswer, StudentActivityError, submitStudentActivityAttempt } from "./student-activity";
 
 export interface Env {
   DB: D1Database;
@@ -102,6 +102,32 @@ async function handleApi(request: Request, env: Env, url: URL) {
       if (error instanceof StudentActivityError) return json({ code: error.code, error: error.message }, error.status);
       console.error("Fallo interno al crear o recuperar un intento estudiantil");
       return json({ code: "INTERNAL_ERROR", error: "No fue posible preparar el intento" }, 500);
+    }
+  }
+
+  const submitMatch = /^\/api\/me\/activities\/([^/]+)\/attempts\/([^/]+)\/submit$/.exec(url.pathname);
+  if (request.method === "POST" && submitMatch) {
+    if (!requestHasValidOrigin(request)) return json({ error: "Origen de solicitud inválido" }, 403);
+    const user = await authenticateRequest(request, env.DB);
+    if (!user) return json({ code: "SESSION_REQUIRED", error: "Sesión requerida" }, 401);
+    let slug: string;
+    try {
+      slug = decodeURIComponent(submitMatch[1]);
+    } catch {
+      return json({ code: "ACTIVITY_NOT_FOUND", error: "La actividad no fue encontrada" }, 404);
+    }
+    try {
+      return json(await submitStudentActivityAttempt(
+        env.DB,
+        user.id,
+        slug,
+        url.searchParams.get("groupCode"),
+        submitMatch[2],
+      ));
+    } catch (error) {
+      if (error instanceof StudentActivityError) return json({ code: error.code, error: error.message }, error.status);
+      console.error("Fallo interno al finalizar un intento estudiantil");
+      return json({ code: "INTERNAL_ERROR", error: "No fue posible finalizar el intento" }, 500);
     }
   }
 
