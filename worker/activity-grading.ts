@@ -18,6 +18,10 @@ export type GradedAnswer = {
   retroalimentacion: string;
 };
 
+export type PublicCorrectAnswer =
+  | { value: string }
+  | { values: string[] };
+
 type CorrectionKey = {
   modo: "opcion" | "seleccion-exacta" | "texto-exacto";
   correctas?: string[];
@@ -67,6 +71,16 @@ function correctionKeyFor(question: ActivityQuestionForGrading): CorrectionKey {
   }
 
   return key as CorrectionKey;
+}
+
+// Frontera explícita entre la clave privada del corrector y la solución que
+// puede mostrarse, sólo tras la autorización de revisión final.
+export function publicCorrectAnswerForReview(question: ActivityQuestionForGrading): PublicCorrectAnswer {
+  const key = correctionKeyFor(question);
+  if (question.tipo === "radio") return { value: key.correctas![0] };
+  if (question.tipo === "checkbox") return { values: [...key.correctas!].sort() };
+  if (question.tipo === "text") return { values: [...key.aceptadas!] };
+  throw new Error(`El tipo de pregunta ${question.tipo} todavía no tiene revisión pública.`);
 }
 
 export function gradeActivity(questions: ActivityQuestionForGrading[], answers: Record<string, unknown>) {

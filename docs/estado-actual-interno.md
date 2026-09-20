@@ -242,7 +242,9 @@ El endpoint `GET /api/me/activities/:slug` devuelve sólo la vista pública de u
 
 El juicio actual se calcula con los umbrales de la actividad: antes de aprobación es `inicial`, desde aprobación y antes del umbral destacado es `en_proceso`, y desde éste es `logrado`. `reviewAvailable` es verdadero únicamente cuando la actividad permite revisión y el estudiante ya consumió todos sus intentos enviados. La revisión completa sigue siendo un endpoint separado.
 
-La migración `0008_snapshots_preguntas_intento.sql` incorpora `preguntas_intento_actividad`: cada intento nuevo recibe atómicamente un snapshot inmutable de sus preguntas, incluidos enunciado, tipo, puntaje máximo y clave privada. La retroalimentación textual no integra el snapshot actual y `submit` no consulta ni devuelve la de la pregunta original. Las respuestas y los cierres se validan contra el snapshot, no contra preguntas que pudieran editarse luego. Los borradores existentes de esta beta se rellenan desde las preguntas actuales; no se fabrican snapshots para intentos históricos enviados o anulados.
+`GET /api/me/activities/:slug/review` es el único endpoint estudiantil autorizado a devolver soluciones. Requiere sesión, rol estudiante, matrícula y grupo válidos, `mostrar_revision = 1` y al menos `maximo_intentos` propios con estado `enviado`; ni borradores ni anulaciones habilitan la revisión. Sigue disponible después del cierre de la ventana académica. Devuelve cada intento enviado y sus preguntas desde el snapshot correspondiente, además del mejor intento según porcentaje, puntaje y fecha de envío. La clave privada se transforma en una respuesta pedagógica pública sin serializar `clave_correccion_json`, `modo` ni otras estructuras internas.
+
+La migración `0008_snapshots_preguntas_intento.sql` incorpora `preguntas_intento_actividad`: cada intento nuevo recibe atómicamente un snapshot inmutable de sus preguntas, incluidos enunciado, tipo, puntaje máximo y clave privada. La migración `0009_snapshot_revision_publica.sql` añade opciones públicas y explicación final al mismo snapshot, para que una edición posterior no altere una revisión autorizada. Las respuestas y los cierres se validan contra el snapshot, no contra preguntas que pudieran editarse luego. Los borradores existentes de esta beta se rellenan desde las preguntas actuales; no se fabrican snapshots para intentos históricos enviados o anulados.
 
 `worker/activity-grading.ts` valida estrictamente claves, compatibilidad de tipos, respuestas checkbox y puntajes finitos, enteros seguros y positivos. Tiene pruebas unitarias con datos ficticios. Una barrera automatizada revisa archivos indexados y candidatos a Git para evitar incorporar claves privadas, incluso si se intenta forzar un archivo ignorado.
 
@@ -278,7 +280,7 @@ Falta implementar el circuito transaccional:
 
 ## 8. Estado de la D1 local
 
-Las migraciones `0001` a `0008` están disponibles y se verifican sobre D1 local limpia. La semilla aporta dos perfiles, una asignatura y un grupo de demostración; las pruebas de integración agregan una tercera cuenta y lotes, activaciones y eventos de auditoría exclusivamente ficticios. Esas cantidades pueden aumentar al repetir las comprobaciones y no deben tratarse como datos de referencia. Cada recorrido cierra su sesión al terminar.
+Las migraciones `0001` a `0009` están disponibles y se verifican sobre D1 local limpia. La semilla aporta dos perfiles, una asignatura y un grupo de demostración; las pruebas de integración agregan una tercera cuenta y lotes, activaciones y eventos de auditoría exclusivamente ficticios. Esas cantidades pueden aumentar al repetir las comprobaciones y no deben tratarse como datos de referencia. Cada recorrido cierra su sesión al terminar.
 
 También están cargados localmente una actividad con 12 preguntas y sus claves privadas de corrección, una habilitación y un contenido versionado publicado. No existen intentos académicos reales y nunca se aplicó el portafolio real de referencia.
 
@@ -309,7 +311,7 @@ La implementación actual superó las siguientes comprobaciones:
 - respuesta `403` ante un origen ajeno en una operación de autenticación;
 - ausencia de sesiones activas al terminar las pruebas;
 - `git diff --check` sin errores de espacios;
-- 30 pruebas automatizadas aprobadas, incluidas criptografía, importación, activaciones, corrector de actividades y barrera contra claves privadas;
+- 31 pruebas automatizadas aprobadas, incluidas criptografía, importación, activaciones, corrector de actividades y barrera contra claves privadas;
 - migraciones completas aplicadas sobre una D1 local limpia y pruebas de persistencia aprobadas, incluida una competencia simultánea donde D1 acepta un solo cupo y rechaza el otro por `maximo_intentos`;
 - build de producción aprobado con los endpoints de previsualización y aplicación;
 - recorrido HTTP ficticio aprobado: autenticación docente, previsualización, aplicación, devolución única de activación, rechazo del lote repetido y cierre de sesión.
@@ -320,7 +322,7 @@ El portafolio real de referencia continúa produciendo una previsualización agr
 
 La integración local contra D1 reemitió dos códigos sucesivos para una cuenta ficticia, comprobó que el primero fuese rechazado inmediatamente después de la segunda emisión y confirmó que una cuenta con contraseña ya no admite reemisión. La salida de la prueba contiene sólo contadores y estados agregados.
 
-`tests/student-activity.test.mjs` verifica con Worker y D1 local el GET seguro, la creación y recuperación idempotente de borradores, el guardado de respuestas, el aislamiento por usuario, grupo, actividad y habilitación, y la persistencia de snapshots sin campos privados en las respuestas públicas.
+`tests/student-activity.test.mjs` verifica con Worker y D1 local el GET seguro, la creación y recuperación idempotente de borradores, el guardado y envío de respuestas, la revisión final autorizada, el aislamiento por usuario, grupo, actividad y habilitación, y la separación entre respuestas públicas normales y soluciones de revisión. Las claves ficticias se transforman sólo dentro del endpoint de revisión.
 
 ## 10. Seguridad y privacidad pendientes
 
@@ -346,7 +348,7 @@ No se deben introducir datos personales reales en semillas, fixtures, Markdown, 
 - Las preguntas y respuestas históricas de la Actividad 0 estuvieron versionadas y deben considerarse comprometidas. La autocorrección y las soluciones fueron retiradas del bundle actual, pero esas preguntas no deben reutilizarse como actividad evaluativa cuya seguridad dependa de mantener oculta la corrección.
 - Las rutas internas estáticas de las unidades todavía no están protegidas por pertenencia al catálogo; fue una decisión consciente fuera del alcance del Hito 3.
 - Los contenidos no están filtrados por publicación/grupo.
-- Falta el endpoint separado de revisión final y el frontend funcional de actividades.
+- Falta el frontend funcional de actividades.
 - No hay flujo de restablecimiento de contraseña.
 - El importador tiene API, pantalla administrativa y cobertura de navegador para el estado inicial y la entrega individual; falta una prueba de integración real de todas las etapas contra D1.
 - No hay panel docente ni de practicante funcional.
@@ -399,8 +401,8 @@ El orden recomendado es el siguiente.
 - Completado: implementar la creación y recuperación idempotente del intento y el guardado de respuestas en borrador.
 - Completado: persistir snapshots inmutables de preguntas por intento.
 - Completado: implementar `submit` idempotente, con autocorrección desde snapshots y persistencia atómica sin devolver respuestas correctas.
-- Después: implementar GET separado de revisión final.
-- Después: construir el frontend funcional de la actividad.
+- Completado: implementar GET separado de revisión final, autorizado y basado en snapshots.
+- Siguiente: construir el frontend funcional de la actividad.
 - Pendiente: mostrar devolución y mejor resultado dentro de esos flujos.
 - Verificar las claves contra Neon antes de cualquier piloto real.
 
@@ -422,6 +424,6 @@ El orden recomendado es el siguiente.
 
 ## 13. Próximo trabajo concreto
 
-El próximo frente técnico antes de usar datos reales es preparar la configuración remota de `DOCUMENT_HMAC_KEY`. El siguiente bloque funcional del **Hito 4 — Actividad 1 completa** es GET separado de revisión final, limitado por la política de revisión de la actividad. Después seguirá el frontend funcional.
+El próximo frente técnico antes de usar datos reales es preparar la configuración remota de `DOCUMENT_HMAC_KEY`. El siguiente bloque funcional del **Hito 4 — Actividad 1 completa** es el frontend funcional: selección de grupo, borrador, envío, resultado y revisión autorizada.
 
 Hasta configurar y custodiar el secreto remoto no deben importarse cuentas reales. El portafolio de 2025 se mantiene únicamente como archivo de validación y no está mapeado a ningún grupo de D1.

@@ -1,5 +1,5 @@
 import { listUserRoles } from "./auth";
-import { gradeActivity, type ActivityQuestionForGrading } from "./activity-grading";
+import { gradeActivity, publicCorrectAnswerForReview, type ActivityQuestionForGrading } from "./activity-grading";
 
 type ActivityRow = {
   id: number;
@@ -62,6 +62,8 @@ export class StudentActivityError extends Error {
       | "ATTEMPT_NOT_EDITABLE"
       | "ATTEMPT_NOT_FINALIZABLE"
       | "ATTEMPT_INCOMPLETE"
+      | "REVIEW_DISABLED"
+      | "REVIEW_NOT_AVAILABLE"
       | "QUESTION_NOT_FOUND"
       | "INVALID_ANSWER",
     message: string,
@@ -94,6 +96,17 @@ type SavedAnswerRow = {
   questionId: number;
   questionNumber: number;
   answerJson: string;
+};
+
+type SubmittedAttemptForReview = {
+  id: number;
+  number: number;
+  ordinal: number | null;
+  score: number;
+  total: number;
+  percentage: number;
+  judgment: "inicial" | "en_proceso" | "logrado";
+  submittedAt: string;
 };
 
 function jsonArray(value: string): unknown[] {
@@ -739,4 +752,122 @@ export async function submitStudentActivityAttempt(
     throw new StudentActivityError(409, "ATTEMPT_NOT_FINALIZABLE", "No fue posible finalizar el intento.");
   }
   return publicSubmittedAttempt(db, activity, access, userId, attempt);
+}
+
+function parsePublicStoredAnswer(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    throw new Error("Una respuesta persistida no contiene JSON válido.");
+  }
+}
+
+async function submittedAttemptsForReview(db: D1Database, activityId: number, habilitationId: number, userId: number) {
+  const attempts = await db.prepare(`
+    SELECT
+      i.id,
+      i.numero_intento AS number,
+      i.ordinal_efectivo AS ordinal,
+      i.puntaje_obtenido AS score,
+      i.puntaje_total AS total,
+      i.porcentaje AS percentage,
+      i.juicio AS judgment,
+      i.enviado_en AS submittedAt
+    FROM intentos_actividad i
+    WHERE i.actividad_id = ?1
+      AND i.habilitacion_id = ?2
+      AND i.usuario_id = ?3
+      AND i.estado = 'enviado'
+    ORDER BY i.ordinal_efectivo, i.numero_intento
+  `).bind(activityId, habilitationId, userId).all<SubmittedAttemptForReview>();
+  return attempts.results;
+}
+
+async function reviewQuestionsForAttempt(db: D1Database, attemptId: number) {
+  const questions = await db.prepare(`
+    SELECT
+      p.pregunta_origen_id AS id,
+      p.numero_pregunta AS numero,
+      p.tipo_pregunta AS tipo,
+      p.enunciado_snapshot AS prompt,
+      p.puntaje_maximo AS puntaje,
+      p.clave_correccion_snapshot_json AS claveCorreccionJson,
+      p.opciones_snapshot_json AS optionsJson,
+      p.explicacion_revision_final_snapshot AS explanation,
+      r.respuesta_dada_json AS studentAnswerJson,
+      r.correcta AS correct,
+      r.puntaje_obtenido AS pointsAwarded
+    FROM preguntas_intento_actividad p
+    JOIN respuestas_intento_actividad r
+      ON r.intento_id = p.intento_id
+     AND r.pregunta_id = p.pregunta_origen_id
+    WHERE p.intento_id = ?1
+    ORDER BY p.numero_pregunta
+  `).bind(attemptId).all<ActivityQuestionForGrading & {
+    prompt: string;
+    optionsJson: string;
+    explanation: string | null;
+    studentAnswerJson: string;
+    correct: number;
+    pointsAwarded: number;
+  }>();
+  if (questions.results.length === 0) throw new Error("El intento enviado no tiene un snapshot revisable.");
+  return questions.results.map((question) => ({
+    number: question.numero,
+    prompt: question.prompt,
+    type: question.tipo,
+    options: jsonArray(question.optionsJson),
+    studentAnswer: parsePublicStoredAnswer(question.studentAnswerJson),
+    correct: question.correct === 1,
+    pointsAwarded: question.pointsAwarded,
+    maxPoints: question.puntaje,
+    correctAnswer: publicCorrectAnswerForReview(question),
+    explanation: question.explanation,
+  }));
+}
+
+export async function getStudentActivityReview(
+  db: D1Database,
+  userId: number,
+  slug: string,
+  groupCode: string | null,
+) {
+  const { activity, access } = await resolveStudentActivityAccess(db, userId, slug, groupCode);
+  if (activity.reviewEnabled !== 1) {
+    throw new StudentActivityError(403, "REVIEW_DISABLED", "La revisión completa no está habilitada para esta actividad.");
+  }
+
+  const attempts = await submittedAttemptsForReview(db, activity.id, access.habilitationId, userId);
+  if (attempts.length < activity.maxAttempts) {
+    throw new StudentActivityError(403, "REVIEW_NOT_AVAILABLE", "La revisión completa todavía no está disponible.");
+  }
+  const bestAttempt = [...attempts].sort((left, right) => (
+    right.percentage - left.percentage
+    || right.score - left.score
+    || left.submittedAt.localeCompare(right.submittedAt)
+  ))[0];
+
+  return {
+    activity: {
+      slug: activity.slug,
+      title: activity.title,
+      totalPoints: activity.totalPoints,
+    },
+    access: {
+      groupCode: access.groupCode,
+      groupName: access.groupName,
+    },
+    bestAttemptId: bestAttempt.id,
+    attempts: await Promise.all(attempts.map(async (attempt) => ({
+      id: attempt.id,
+      number: attempt.number,
+      ordinal: attempt.ordinal,
+      score: attempt.score,
+      total: attempt.total,
+      percentage: attempt.percentage,
+      judgment: attempt.judgment,
+      submittedAt: attempt.submittedAt,
+      questions: await reviewQuestionsForAttempt(db, attempt.id),
+    }))),
+  };
 }

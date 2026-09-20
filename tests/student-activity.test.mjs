@@ -147,7 +147,8 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
       (16, 'actividad-reintento-cierre', 1, 'unidad-1', 'tema', 16, 'Reintento tras cierre', '', 'activa', 1, 2),
       (17, 'actividad-reintento-deshabilitada', 1, 'unidad-1', 'tema', 17, 'Reintento tras deshabilitar', '', 'activa', 1, 2),
       (18, 'actividad-respuestas', 1, 'unidad-1', 'tema', 18, 'Actividad de respuestas', '', 'activa', 2, 1),
-      (19, 'actividad-submit', 1, 'unidad-1', 'tema', 19, 'Actividad de entrega', '', 'activa', 3, 2);
+      (19, 'actividad-submit', 1, 'unidad-1', 'tema', 19, 'Actividad de entrega', '', 'activa', 3, 2),
+      (20, 'actividad-revision-deshabilitada', 1, 'unidad-1', 'tema', 20, 'Revisión deshabilitada', '', 'activa', 1, 1);
     INSERT INTO habilitaciones_actividad
       (id, actividad_id, grupo_id, habilitada, disponible_desde, disponible_hasta)
     VALUES
@@ -160,7 +161,7 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
       (14, 12, 1, 1, NULL, NULL), (15, 13, 1, 1, datetime('now'), NULL),
       (16, 14, 1, 1, NULL, datetime('now')), (17, 15, 1, 1, NULL, NULL),
       (18, 16, 1, 1, NULL, NULL), (19, 17, 1, 1, NULL, NULL), (20, 18, 1, 1, NULL, NULL),
-      (21, 19, 1, 1, NULL, NULL);
+      (21, 19, 1, 1, NULL, NULL), (22, 20, 1, 1, NULL, NULL);
     INSERT INTO preguntas_actividad
       (id, actividad_id, numero, tipo, enunciado, instrucciones, opciones_json, recursos_json, placeholder, puntaje, clave_correccion_json, retroalimentacion_correcta, retroalimentacion_incorrecta)
     VALUES
@@ -178,6 +179,7 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
       (12, 19, 2, 'text', 'Texto de entrega', '', '[]', '[]', NULL, 1, '{"modo":"texto-exacto","aceptadas":["valor"]}', 'Feedback privado correcto', 'Feedback privado incorrecto'),
       (13, 19, 3, 'checkbox', 'Checkbox de entrega', '', '[]', '[]', NULL, 1, '{"modo":"seleccion-exacta","correctas":["a","c"]}', 'Feedback privado correcto', 'Feedback privado incorrecto');
   `);
+  database.exec("UPDATE actividades SET mostrar_revision = 0 WHERE id = 20");
   const sentAttemptId = insertAttempt(database, 6, 8, 1, 1, 1, "agotada-uno");
   database.exec(`
     INSERT INTO respuestas_intento_actividad
@@ -293,25 +295,46 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
     });
     return { response, body: await response.json() };
   };
+  const review = async (slug, groupCode = null, token = studentToken) => {
+    const suffix = groupCode ? `?groupCode=${encodeURIComponent(groupCode)}` : "";
+    const response = await fetch(`${baseUrl}/api/me/activities/${slug}/review${suffix}`, {
+      headers: { Cookie: `pm_session=${token}` },
+    });
+    return { response, body: await response.json() };
+  };
 
   const anonymous = await fetch(`${baseUrl}/api/me/activities/actividad-publica`);
   assert.equal(anonymous.status, 401);
   assert.equal(anonymous.headers.get("Cache-Control"), "no-store");
   assert.equal((await anonymous.json()).code, "SESSION_REQUIRED");
 
+  const anonymousReview = await fetch(`${baseUrl}/api/me/activities/actividad-submit/review`);
+  assert.equal(anonymousReview.status, 401);
+  assert.equal(anonymousReview.headers.get("Cache-Control"), "no-store");
+  assert.equal((await anonymousReview.json()).code, "SESSION_REQUIRED");
+
   const teacher = await get("/api/me/activities/actividad-publica?groupCode=grupo-a", teacherToken);
   assert.equal(teacher.response.status, 403);
   assert.equal(teacher.response.headers.get("Cache-Control"), "no-store");
   assert.equal(teacher.body.code, "STUDENT_ROLE_REQUIRED");
+  const teacherReview = await review("actividad-submit", null, teacherToken);
+  assert.equal(teacherReview.response.status, 403);
+  assert.equal(teacherReview.body.code, "STUDENT_ROLE_REQUIRED");
 
   const noEnrollment = await get("/api/me/activities/actividad-publica?groupCode=grupo-a", noGroupToken);
   assert.equal(noEnrollment.response.status, 403);
   assert.equal(noEnrollment.body.code, "NOT_ENROLLED");
+  const noEnrollmentReview = await review("actividad-submit", null, noGroupToken);
+  assert.equal(noEnrollmentReview.response.status, 403);
+  assert.equal(noEnrollmentReview.body.code, "NOT_ENROLLED");
 
   const missing = await get("/api/me/activities/no-existe?groupCode=grupo-a");
   assert.equal(missing.response.status, 404);
   assert.equal(missing.response.headers.get("Cache-Control"), "no-store");
   assert.equal(missing.body.code, "ACTIVITY_NOT_FOUND");
+  const missingReview = await review("no-existe");
+  assert.equal(missingReview.response.status, 404);
+  assert.equal(missingReview.body.code, "ACTIVITY_NOT_FOUND");
 
   const selector = await get("/api/me/activities/actividad-publica");
   assert.equal(selector.response.status, 409);
@@ -322,6 +345,22 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
   const foreignGroup = await get("/api/me/activities/actividad-publica?groupCode=grupo-ajeno");
   assert.equal(foreignGroup.response.status, 403);
   assert.equal(foreignGroup.body.code, "NOT_ENROLLED");
+  const foreignGroupReview = await review("actividad-submit", "grupo-ajeno");
+  assert.equal(foreignGroupReview.response.status, 403);
+  assert.equal(foreignGroupReview.body.code, "NOT_ENROLLED");
+
+  const disabledReview = await review("actividad-revision-deshabilitada");
+  assert.equal(disabledReview.response.status, 403);
+  assert.equal(disabledReview.body.code, "REVIEW_DISABLED");
+  const prematureReview = await review("actividad-submit");
+  assert.equal(prematureReview.response.status, 403);
+  assert.equal(prematureReview.body.code, "REVIEW_NOT_AVAILABLE");
+  const inProgressReview = await review("actividad-en-progreso");
+  assert.equal(inProgressReview.response.status, 403);
+  assert.equal(inProgressReview.body.code, "REVIEW_NOT_AVAILABLE");
+  const annulledReview = await review("actividad-anulada");
+  assert.equal(annulledReview.response.status, 403);
+  assert.equal(annulledReview.body.code, "REVIEW_NOT_AVAILABLE");
 
   const available = await get("/api/me/activities/actividad-publica?groupCode=GRUPO-A");
   assert.equal(available.response.status, 200);
@@ -333,7 +372,7 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
   assert.equal(available.body.attempts.best, null);
   assert.deepEqual(available.body.questions, [{ number: 1, type: "radio", prompt: "Pregunta pública", instructions: "Elegí una opción", options: ["a", "b"], resources: ["recurso-publico"], placeholder: "No corresponde", points: 1 }]);
   const serialized = JSON.stringify(available.body);
-  for (const forbidden of ["clave_correccion_json", "retroalimentacion_correcta", "retroalimentacion_incorrecta", "respuesta_normalizada_json", "respuesta_dada_json", "correcta", "devolucion", "explicacion_revision_final"]) {
+  for (const forbidden of ["clave_correccion_json", "retroalimentacion_correcta", "retroalimentacion_incorrecta", "respuesta_normalizada_json", "respuesta_dada_json", "correcta", "devolucion", "explicacion_revision_final", "correctAnswer"]) {
     assert.equal(serialized.includes(forbidden), false, `La respuesta no debe incluir ${forbidden}`);
   }
 
@@ -444,10 +483,12 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
   assert.equal(firstAttempt.body.access.groupCode, "grupo-a");
   assert.equal(JSON.stringify(firstAttempt.body).includes("clave_correccion_json"), false);
   assert.equal(JSON.stringify(firstAttempt.body).includes("clave_correccion_snapshot_json"), false);
+  assert.equal(JSON.stringify(firstAttempt.body).includes("correctAnswer"), false);
   const savedFirst = await putAnswer("actividad-publica", firstAttempt.body.attempt.id, 1, { groupCode: "grupo-a", answer: "primera versión" });
   assert.equal(savedFirst.response.status, 200);
   assert.deepEqual(savedFirst.body, { attempt: { id: firstAttempt.body.attempt.id, state: "en_progreso" }, question: { number: 1, type: "radio" }, saved: true });
   assert.equal(JSON.stringify(savedFirst.body).includes("clave_correccion_json"), false);
+  assert.equal(JSON.stringify(savedFirst.body).includes("correctAnswer"), false);
   const updatedFirst = await putAnswer("actividad-publica", firstAttempt.body.attempt.id, 1, { groupCode: "grupo-a", answer: "segunda versión" });
   assert.equal(updatedFirst.response.status, 200);
   const snapshotBeforeMutation = new DatabaseSync(databasePath);
@@ -581,6 +622,19 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
   assert.equal(anonymousSubmit.headers.get("Cache-Control"), "no-store");
   assert.equal((await anonymousSubmit.json()).code, "SESSION_REQUIRED");
 
+  const reviewSource = new DatabaseSync(databasePath);
+  reviewSource.exec(`
+    UPDATE preguntas_actividad SET
+      opciones_json = '["a","b"]', explicacion_revision_final = 'Explicación final radio ficticia'
+    WHERE id = 11;
+    UPDATE preguntas_actividad SET
+      explicacion_revision_final = 'Explicación final texto ficticia'
+    WHERE id = 12;
+    UPDATE preguntas_actividad SET
+      opciones_json = '["a","b","c"]', explicacion_revision_final = 'Explicación final checkbox ficticia'
+    WHERE id = 13;
+  `);
+  reviewSource.close();
   const submitDraft = await postAttempt("actividad-submit", { submissionId: "entrega-completa" });
   assert.equal(submitDraft.response.status, 201);
   const incompleteSubmit = await submit("actividad-submit", submitDraft.body.attempt.id);
@@ -668,6 +722,68 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
   assert.equal(secondSubmitted.body.reviewAvailable, true);
   assert.equal(secondSubmitted.body.attempts.best.id, undefined);
   assert.equal(secondSubmitted.body.attempts.best.score, 3);
+  const changeOriginalAfterSubmit = new DatabaseSync(databasePath);
+  changeOriginalAfterSubmit.exec(`
+    UPDATE preguntas_actividad SET
+      enunciado = 'Pregunta editada después de enviar', opciones_json = '["cambio"]',
+      explicacion_revision_final = 'Explicación editada después de enviar'
+    WHERE id IN (11, 12, 13);
+    UPDATE habilitaciones_actividad
+    SET disponible_hasta = '2020-01-01T00:00:00Z'
+    WHERE id = 21;
+  `);
+  changeOriginalAfterSubmit.close();
+  const reviewAfterClose = await review("actividad-submit");
+  assert.equal(reviewAfterClose.response.status, 200);
+  assert.equal(reviewAfterClose.response.headers.get("Cache-Control"), "no-store");
+  assert.equal(reviewAfterClose.body.bestAttemptId, submitDraft.body.attempt.id);
+  assert.equal(reviewAfterClose.body.attempts.length, 2);
+  assert.deepEqual(reviewAfterClose.body.attempts.map((attempt) => attempt.id), [submitDraft.body.attempt.id, secondSubmitDraft.body.attempt.id]);
+  assert.deepEqual(reviewAfterClose.body.attempts[0].questions, [
+    {
+      number: 1,
+      prompt: "Radio de entrega",
+      type: "radio",
+      options: ["a", "b"],
+      studentAnswer: "b",
+      correct: true,
+      pointsAwarded: 1,
+      maxPoints: 1,
+      correctAnswer: { value: "b" },
+      explanation: "Explicación final radio ficticia",
+    },
+    {
+      number: 2,
+      prompt: "Texto de entrega",
+      type: "text",
+      options: [],
+      studentAnswer: " valor ",
+      correct: true,
+      pointsAwarded: 1,
+      maxPoints: 1,
+      correctAnswer: { values: ["valor"] },
+      explanation: "Explicación final texto ficticia",
+    },
+    {
+      number: 3,
+      prompt: "Checkbox de entrega",
+      type: "checkbox",
+      options: ["a", "b", "c"],
+      studentAnswer: ["c", "a"],
+      correct: true,
+      pointsAwarded: 1,
+      maxPoints: 1,
+      correctAnswer: { values: ["a", "c"] },
+      explanation: "Explicación final checkbox ficticia",
+    },
+  ]);
+  const reviewJson = JSON.stringify(reviewAfterClose.body);
+  for (const forbidden of ["clave_correccion_json", "clave_correccion_snapshot_json", "\"modo\"", "correctas", "aceptadas", "SQL"]) {
+    assert.equal(reviewJson.includes(forbidden), false, `revisión no debe incluir ${forbidden}`);
+  }
+  const otherStudentReview = await review("actividad-submit", null, otherStudentToken);
+  assert.equal(otherStudentReview.response.status, 403);
+  assert.equal(otherStudentReview.body.code, "REVIEW_NOT_AVAILABLE");
 
   const concurrent = await Promise.all([
     postAttempt("actividad-en-progreso", { submissionId: "concurrente-a" }),

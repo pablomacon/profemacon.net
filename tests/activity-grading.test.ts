@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { gradeActivity, type ActivityQuestionForGrading } from "../worker/activity-grading.ts";
+import { gradeActivity, publicCorrectAnswerForReview, type ActivityQuestionForGrading } from "../worker/activity-grading.ts";
 
 const question = (
   overrides: Partial<ActivityQuestionForGrading> = {},
@@ -111,4 +111,16 @@ test("rechaza un total que deja de ser un entero seguro", () => {
     ], {}),
     /puntaje total inválido/,
   );
+});
+
+test("transforma la clave privada en una respuesta pedagógica sin exponer su modo", () => {
+  assert.deepEqual(publicCorrectAnswerForReview(question()), { value: "opcion-b" });
+  assert.deepEqual(publicCorrectAnswerForReview(question({
+    tipo: "text",
+    claveCorreccionJson: JSON.stringify({ modo: "texto-exacto", aceptadas: ["valor ficticio"] }),
+  })), { values: ["valor ficticio"] });
+  assert.deepEqual(publicCorrectAnswerForReview(question({
+    tipo: "checkbox",
+    claveCorreccionJson: JSON.stringify({ modo: "seleccion-exacta", correctas: ["item-c", "item-a"] }),
+  })), { values: ["item-a", "item-c"] });
 });
