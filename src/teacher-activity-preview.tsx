@@ -14,7 +14,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return body;
 }
 
-export function TeacherActivityPreview({ slug, onBack, onLogin }: { slug: string; onBack: () => void; onLogin: () => void }) {
+export function TeacherActivityPreview({ slug, onBack, onLogin, initialGroupCode }: { slug: string; onBack: () => void; onLogin: () => void; initialGroupCode?: string }) {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
   const [groupCode, setGroupCode] = useState<string | null>(null);
@@ -33,7 +33,7 @@ export function TeacherActivityPreview({ slug, onBack, onLogin }: { slug: string
       setMessage(failure.status === 401 ? "Tu sesión venció. Volvé a ingresar." : failure.message); setState("error");
     }
   };
-  useEffect(() => { void load(null); }, []);
+  useEffect(() => { void load(initialGroupCode ?? null); }, [initialGroupCode, slug]);
   const complete = useMemo(() => !!preview && preview.questions.every((question) => answered(question, answers[question.number])), [preview, answers]);
   const grade = async () => {
     if (!preview || !complete || !groupCode) return;

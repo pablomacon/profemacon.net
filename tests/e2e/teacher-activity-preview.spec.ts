@@ -6,6 +6,8 @@ const questions = [
   { number: 2, type: "checkbox", prompt: "Checkbox ficticia", instructions: "Elegí", options: [{ valor: "a", texto: "A" }, { valor: "c", texto: "C" }], resources: [], placeholder: null, points: 1 },
   { number: 3, type: "text", prompt: "Texto ficticio", instructions: "Escribí", options: [], resources: [], placeholder: "Respuesta", points: 1 },
 ];
+// Entrada contextual vigente: /docente → grupo → actividades → "Probar actividad".
+const previewRoute = "/docente/grupos/7/actividades/variables-java-01/prueba";
 
 async function mockPreview(page: Page) {
   await page.route("**/api/session", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ user: teacher }) }));
@@ -19,8 +21,8 @@ async function mockPreview(page: Page) {
 
 test("el docente prueba, corrige y repite sin perder la distinción visual", async ({ page }) => {
   await mockPreview(page);
-  await page.goto("/docente");
-  await page.getByRole("button", { name: "Probar Actividad 1" }).click();
+  await page.goto(previewRoute);
+  await expect(page.getByRole("heading", { name: "Elegí un grupo asignado" })).toBeVisible();
   await page.getByRole("button", { name: "Grupo A" }).click();
   await expect(page.getByText("Modo prueba docente").first()).toBeVisible();
   await expect(page.getByText("Esta ejecución no genera resultados académicos.")).toBeVisible();
@@ -37,7 +39,7 @@ test("el docente prueba, corrige y repite sin perder la distinción visual", asy
 
 test("el preview docente es responsive y no muestra claves internas", async ({ page }) => {
   await mockPreview(page);
-  await page.goto("/docente/actividades/variables-java-01/prueba");
+  await page.goto(previewRoute);
   await page.getByRole("button", { name: "Grupo A" }).click();
   await expect(page.getByText("Versión borrador ficticia")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);

@@ -6,13 +6,14 @@ import { Unit1 } from "./courses/programacion-i/unidad-1/lesson";
 import { VariablesJavaActivity1 } from "./courses/programacion-i/unidad-1/activity-variables-01";
 import { TeacherActivityPreview } from "./teacher-activity-preview";
 import { TeacherGroupPage, TeacherGroupsPage } from "./teacher-groups";
+import { TeacherGroupActivities } from "./teacher-group-activities";
 import { Login } from "./login";
 import { ActivationManagement } from "./activation-management";
 import { StudentImportWizard } from "./student-import-wizard";
 import { MyCourses } from "./my-courses";
 import "./styles.css";
 
-type Route = "/" | "/ingresar" | "/mis-cursos" | "/historial" | "/docente" | "/docente/importar-estudiantes" | "/docente/activaciones" | "/docente/actividades/variables-java-01/prueba" | `/docente/grupos/${number}` | "/practicante" | "/curso/programacion-i/unidad-0" | "/curso/programacion-i/unidad-0/actividad" | "/curso/programacion-i/unidad-1" | "/curso/programacion-i/unidad-1/actividad/variables-java-01";
+type Route = "/" | "/ingresar" | "/mis-cursos" | "/historial" | "/docente" | "/docente/importar-estudiantes" | "/docente/activaciones" | "/docente/actividades/variables-java-01/prueba" | `/docente/grupos/${number}` | `/docente/grupos/${number}/actividades` | `/docente/grupos/${number}/actividades/${string}/prueba` | "/practicante" | "/curso/programacion-i/unidad-0" | "/curso/programacion-i/unidad-0/actividad" | "/curso/programacion-i/unidad-1" | "/curso/programacion-i/unidad-1/actividad/variables-java-01";
 type Theme = "dark" | "light";
 type SessionUser = { id: number; username: string; displayName: string; email: string | null; roles: string[] };
 type SessionState =
@@ -140,12 +141,13 @@ function TeacherPanel({ user }: { user: SessionUser | null }) {
 }
 
 function App() {
-  const [route, setRoute] = useState<Route>(() => (supportedRoutes.includes(window.location.pathname as Route) || /^\/docente\/grupos\/\d+$/.test(window.location.pathname)) ? window.location.pathname as Route : "/");
+  const isDynamicTeacherRoute = (path: string) => /^\/docente\/grupos\/\d+(?:\/actividades(?:\/[^/]+\/prueba)?)?$/.test(path);
+  const [route, setRoute] = useState<Route>(() => (supportedRoutes.includes(window.location.pathname as Route) || isDynamicTeacherRoute(window.location.pathname)) ? window.location.pathname as Route : "/");
   const [theme, setTheme] = useState<Theme>(() => localStorage.getItem("profemacon-theme") === "light" ? "light" : "dark");
   const [session, setSession] = useState<SessionState>({ status: "checking" });
   const sessionRequestId = useRef(0);
   const user = session.status === "authenticated" ? session.user : null;
-  useEffect(() => { const listener = () => setRoute((supportedRoutes.includes(window.location.pathname as Route) || /^\/docente\/grupos\/\d+$/.test(window.location.pathname)) ? window.location.pathname as Route : "/"); window.addEventListener("popstate", listener); return () => window.removeEventListener("popstate", listener); }, []);
+  useEffect(() => { const listener = () => setRoute((supportedRoutes.includes(window.location.pathname as Route) || isDynamicTeacherRoute(window.location.pathname)) ? window.location.pathname as Route : "/"); window.addEventListener("popstate", listener); return () => window.removeEventListener("popstate", listener); }, []);
   useEffect(() => { localStorage.setItem("profemacon-theme", theme); }, [theme]);
 
   const checkSession = useCallback(async (navigateOnSuccess = false, signal?: AbortSignal): Promise<boolean> => {
@@ -214,7 +216,9 @@ function App() {
     : route === "/curso/programacion-i/unidad-1/actividad/variables-java-01" ? <VariablesJavaActivity1 onBack={() => navigate("/curso/programacion-i/unidad-1")} onLogin={() => navigate("/ingresar")} />
     : route === "/historial" ? <Placeholder section="Archivo" title="Historial" detail="Los cursos archivados, resultados y materiales de solo lectura aparecerán en esta vista." />
     : route === "/docente" ? <TeacherGroupsPage open={(id) => navigate(`/docente/grupos/${id}`)} />
-    : /^\/docente\/grupos\/\d+$/.test(route) ? <TeacherGroupPage id={Number(route.split("/").at(-1))} onBack={() => navigate("/docente")} />
+    : /^\/docente\/grupos\/\d+\/actividades\/[^/]+\/prueba$/.test(route) ? (() => { const [, id, slug] = /^\/docente\/grupos\/(\d+)\/actividades\/([^/]+)\/prueba$/.exec(route)!; return <TeacherActivityPreview slug={slug} onBack={() => navigate(`/docente/grupos/${id}/actividades` as Route)} onLogin={() => navigate("/ingresar")} initialGroupCode={sessionStorage.getItem(`teacher-preview-group-${id}-${slug}`) ?? undefined} />; })()
+    : /^\/docente\/grupos\/\d+\/actividades$/.test(route) ? <TeacherGroupActivities groupId={Number(route.split("/")[3])} onBack={() => navigate(`/docente/grupos/${route.split("/")[3]}` as Route)} onPreview={(slug, groupCode) => { sessionStorage.setItem(`teacher-preview-group-${route.split("/")[3]}-${slug}`, groupCode); navigate(`/docente/grupos/${route.split("/")[3]}/actividades/${slug}/prueba` as Route); }} />
+    : /^\/docente\/grupos\/\d+$/.test(route) ? <TeacherGroupPage id={Number(route.split("/").at(-1))} onBack={() => navigate("/docente")} onActivities={() => navigate(`${route}/actividades` as Route)} />
     : route === "/docente/importar-estudiantes" ? user?.roles.some((role) => role === "docente" || role === "administrador") ? <StudentImportWizard onBack={() => navigate("/docente")} /> : <TeacherPanel user={user} />
     : route === "/docente/activaciones" ? user?.roles.some((role) => role === "docente" || role === "administrador") ? <ActivationManagement onBack={() => navigate("/docente")} /> : <TeacherPanel user={user} />
     : route === "/docente/actividades/variables-java-01/prueba" ? <TeacherActivityPreview slug="variables-java-01" onBack={() => navigate("/docente")} onLogin={() => navigate("/ingresar")} />

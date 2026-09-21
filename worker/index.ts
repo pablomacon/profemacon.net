@@ -6,6 +6,7 @@ import { applyStudentImport, previewStudentImport, readStudentImportBody, Studen
 import { createOrRecoverStudentActivityAttempt, getStudentActivity, getStudentActivityDraft, getStudentActivityReview, saveStudentActivityAnswer, StudentActivityError, submitStudentActivityAttempt } from "./student-activity";
 import { getTeacherActivityPreview, gradeTeacherActivityPreview, TeacherPreviewError } from "./teacher-activity-preview";
 import { listTeacherGroups, requireTeacherGroupScope, TeacherGroupScopeError } from "./teacher-group-scope";
+import { listTeacherGroupActivities, saveTeacherAvailability, TeacherActivityManagementError } from "./teacher-group-activities";
 
 export interface Env {
   DB: D1Database;
@@ -77,6 +78,15 @@ async function handleApi(request: Request, env: Env, url: URL) {
   }
 
   const teacherPreviewGradeMatch = /^\/api\/teacher\/activities\/([^/]+)\/preview\/grade$/.exec(url.pathname);
+  const availabilityMatch = /^\/api\/teacher\/groups\/(\d+)\/activities\/(\d+)\/availability$/.exec(url.pathname);
+  if (request.method === "PUT" && availabilityMatch) {
+    if (!requestHasValidOrigin(request)) return json({ code: "INVALID_ORIGIN", error: "Origen de solicitud inválido" }, 403);
+    const user = await authenticateRequest(request, env.DB);
+    if (!user) return json({ code: "SESSION_REQUIRED", error: "Sesión requerida" }, 401);
+    const body = await readJsonBody(request);
+    try { return json(await saveTeacherAvailability(env.DB, user.id, Number(availabilityMatch[1]), Number(availabilityMatch[2]), body)); }
+    catch (error) { if (error instanceof TeacherActivityManagementError || error instanceof TeacherGroupScopeError) return json({ code: error.code, error: error.message }, error.status); console.error("Fallo interno al guardar una habilitación docente"); return json({ code: "INTERNAL_ERROR", error: "No fue posible guardar la habilitación" }, 500); }
+  }
   if (request.method === "POST" && teacherPreviewGradeMatch) {
     if (!requestHasValidOrigin(request)) return json({ error: "Origen de solicitud inválido" }, 403);
     const user = await authenticateRequest(request, env.DB);
@@ -190,6 +200,8 @@ async function handleApi(request: Request, env: Env, url: URL) {
     catch (error) { if (error instanceof TeacherGroupScopeError) return json({ code: error.code, error: error.message }, error.status); return json({ code: "INTERNAL_ERROR", error: "No fue posible consultar los grupos" }, 500); }
   }
   const teacherGroupMatch = /^\/api\/teacher\/groups\/([^/]+)$/.exec(url.pathname);
+  const teacherActivitiesMatch = /^\/api\/teacher\/groups\/(\d+)\/activities$/.exec(url.pathname);
+  if(teacherActivitiesMatch){const user=await authenticateRequest(request,env.DB);if(!user)return json({code:"SESSION_REQUIRED",error:"Sesión requerida"},401);try{return json(await listTeacherGroupActivities(env.DB,user.id,Number(teacherActivitiesMatch[1])));}catch(error){if(error instanceof TeacherGroupScopeError)return json({code:error.code,error:error.message},error.status);return json({code:"INTERNAL_ERROR",error:"No fue posible consultar actividades"},500);}}
   if (teacherGroupMatch) {
     const user = await authenticateRequest(request, env.DB);
     if (!user) return json({ code: "SESSION_REQUIRED", error: "Sesión requerida" }, 401);

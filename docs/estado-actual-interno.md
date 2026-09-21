@@ -1,6 +1,6 @@
 # Estado interno de Profe Macón 2.0
 
-Última actualización: 20 de septiembre de 2026.
+Última actualización: 21 de septiembre de 2026.
 
 Este documento es la memoria operativa del proyecto. Describe qué existe, qué funciona realmente, qué decisiones ya fueron tomadas y cuál es el orden recomendado para continuar. No contiene credenciales ni datos personales reales y, por decisión del responsable, todavía no está enlazado desde el `README.md`.
 
@@ -407,9 +407,14 @@ El orden recomendado es el siguiente.
 ### Hito 5 — Panel docente mínimo
 
 - Completado: alcance docente centralizado por grupo, listado real y resumen mínimo de grupos asignados.
-- Pendiente: actividades por grupo, habilitaciones, intentos y resultados.
+- Completado (Bloque B): actividades por grupo y habilitaciones, con backend y frontend verificados por pruebas Worker/D1 y E2E.
+- Pendiente (Bloque C): intentos y resultados por estudiante.
 
-El Hito 5 comenzó con `requireTeacherGroupScope`: cada consulta docente exige sesión, rol `docente`, grupo existente y activo, asignación docente activa y, si hay actividad, coincidencia de edición anual. `groupId` interno se usa sólo como selector de routing, nunca como autorización. `GET /api/teacher/groups` lista únicamente los grupos autorizados y `GET /api/teacher/groups/:groupId` reutiliza el mismo alcance. `/docente` muestra la lista real y `/docente/grupos/:groupId` su resumen mínimo. El preview docente ahora también rechaza un `groupCode` de otra edición. Los Bloques B y C —actividades/habilitaciones y resultados— siguen pendientes.
+El Hito 5 comenzó con `requireTeacherGroupScope`: cada consulta docente exige sesión, rol `docente`, grupo existente y activo, asignación docente activa y, si hay actividad, coincidencia de edición anual. `groupId` interno se usa sólo como selector de routing, nunca como autorización. `GET /api/teacher/groups` lista únicamente los grupos autorizados y `GET /api/teacher/groups/:groupId` reutiliza el mismo alcance. `/docente` muestra la lista real y `/docente/grupos/:groupId` su resumen mínimo. El preview docente también rechaza un `groupCode` de otra edición.
+
+El Bloque B está implementado y verificado. `GET /api/teacher/groups/:groupId/activities` lista las actividades de la misma edición anual, incluso sin habilitación, y devuelve sólo metadatos públicos, estado temporal (`disabled`, `not_open`, `closed`, `available`) calculado por D1 y participantes únicos (estudiantes distintos con intentos ligados a la habilitación). `PUT /api/teacher/groups/:groupId/activities/:activityId/availability` crea o actualiza idempotentemente la habilitación, exige rol docente, grupo autorizado y actividad de la misma edición, valida fechas ISO UTC con la regla apertura < cierre y requiere Origin válido. `/docente/grupos/:groupId/actividades` permite configurar habilitación, apertura y cierre con guardado explícito, pide confirmación al deshabilitar una actividad habilitada y muestra las fechas en hora local (persistidas en UTC). `maximo_intentos` se mantiene deliberadamente como sólo lectura para no alterar intentos históricos sin una política académica explícita. El modo prueba docente reutiliza el preview existente y puede abrirse de forma contextual desde el listado, heredando el grupo vía `sessionStorage`. Las APIs heredan `Cache-Control: no-store`. El Bloque C —resultados por estudiante— sigue pendiente, junto con la edición de contenido/preguntas.
+
+Cobertura del Bloque B: pruebas Worker/D1 en `tests/student-activity.test.mjs` (listado, estados temporales, participantes únicos, validaciones del PUT, autorización, Origin, `no-store`) y E2E en `tests/e2e/teacher-group-activities.spec.ts` (navegación, listado, guardado, fechas en hora local, confirmación al deshabilitar, preview contextual) y `tests/e2e/teacher-activity-preview.spec.ts` (preview docente desde la ruta contextual).
 - Consultar grupos asignados.
 - Importar o aprobar inscripciones.
 - Habilitar actividades y fechas.
@@ -426,6 +431,6 @@ El Hito 5 comenzó con `requireTeacherGroupScope`: cada consulta docente exige s
 
 ## 13. Próximo trabajo concreto
 
-El próximo frente técnico antes de usar datos reales es preparar la configuración remota de `DOCUMENT_HMAC_KEY`. El **Hito 4 — Actividad 1 completa** está funcionalmente cerrado en entorno local, incluido el modo prueba docente sin persistencia académica. El siguiente frente mayor es el **Hito 5 — Panel docente mínimo**.
+El próximo frente técnico antes de usar datos reales es preparar la configuración remota de `DOCUMENT_HMAC_KEY`. El **Hito 4 — Actividad 1 completa** está funcionalmente cerrado en entorno local, incluido el modo prueba docente sin persistencia académica. El **Hito 5 — Panel docente mínimo** tiene cerrados el alcance por grupo (listado y resumen) y el Bloque B (actividades y habilitaciones por grupo, con backend y frontend verificados). El siguiente frente dentro del Hito 5 es el Bloque C —resultados por estudiante— y, más adelante, la edición de contenido/preguntas.
 
 Hasta configurar y custodiar el secreto remoto no deben importarse cuentas reales. El portafolio de 2025 se mantiene únicamente como archivo de validación y no está mapeado a ningún grupo de D1.

@@ -919,3 +919,248 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
   const concurrentDraftState = await get("/api/me/activities/actividad-borrador-concurrente");
   assert.equal(concurrentDraftState.body.attempts.draft.attemptId, concurrent.find(({ response }) => response.status === 201).body.attempt.id);
 });
+
+test("Bloque B: listado y habilitación de actividades docentes por grupo con D1 local", async (t) => {
+  const projectRoot = process.cwd();
+  const persistenceRoot = mkdtempSync(join(tmpdir(), "profemacon-teacher-activities-"));
+  let database;
+  let localWorker;
+  let workerOutput = "";
+  let workerExited = false;
+  t.after(async () => {
+    if (localWorker && !localWorker.killed) {
+      const exited = once(localWorker, "exit");
+      localWorker.kill();
+      await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 2_000))]);
+    }
+    database?.close();
+    rmSync(persistenceRoot, { recursive: true, force: true });
+  });
+
+  execFileSync(process.execPath, [
+    join(projectRoot, "node_modules", "wrangler", "bin", "wrangler.js"),
+    "d1", "migrations", "apply", "profemacon-beta-local", "--local", "--persist-to", persistenceRoot,
+  ], { cwd: projectRoot, stdio: "ignore" });
+  const databasePath = findSqliteFile(persistenceRoot);
+  assert.ok(databasePath, "La prueba necesita una base D1 local");
+  database = new DatabaseSync(databasePath);
+  database.exec("PRAGMA foreign_keys = ON");
+  database.exec(`
+    INSERT INTO roles (id, codigo, nombre) VALUES
+      (1, 'estudiante', 'Estudiante'), (2, 'docente', 'Docente'), (3, 'practicante', 'Practicante');
+    INSERT INTO usuarios (id, nombre_usuario, nombre_mostrado) VALUES
+      (1, 'estudiante-a', 'Estudiante A'),
+      (2, 'docente-prueba', 'Docente de prueba'),
+      (3, 'estudiante-b', 'Estudiante B'),
+      (4, 'practicante-prueba', 'Practicante de prueba');
+    INSERT INTO usuario_roles (usuario_id, rol_id) VALUES (1, 1), (2, 2), (3, 1), (4, 3);
+    INSERT INTO asignaturas (id, codigo, nombre) VALUES (1, 'programacion-prueba', 'Programación de prueba');
+    INSERT INTO ediciones_anuales (id, asignatura_id, anio, nombre, estado) VALUES
+      (1, 1, 2026, 'Edición de prueba', 'activa'),
+      (2, 1, 2027, 'Edición siguiente', 'activa');
+    INSERT INTO grupos (id, edicion_anual_id, codigo, nombre) VALUES
+      (1, 1, 'grupo-a', 'Grupo A'), (2, 2, 'grupo-b', 'Grupo B');
+    INSERT INTO inscripciones (usuario_id, grupo_id, estado) VALUES
+      (1, 1, 'activa'), (3, 1, 'activa');
+    INSERT INTO actividades
+      (id, slug, edicion_anual_id, unidad_codigo, tema, orden, titulo, descripcion, estado, puntaje_total, maximo_intentos)
+    VALUES
+      (1, 'act-sin-habilitacion', 1, 'unidad-1', 'tema', 1, 'Sin habilitación', '', 'activa', 1, 3),
+      (2, 'act-deshabilitada', 1, 'unidad-1', 'tema', 2, 'Deshabilitada', '', 'activa', 1, 1),
+      (3, 'act-no-abierta', 1, 'unidad-1', 'tema', 3, 'No abierta', '', 'activa', 1, 1),
+      (4, 'act-cerrada', 1, 'unidad-1', 'tema', 4, 'Cerrada', '', 'activa', 1, 1),
+      (5, 'act-disponible', 1, 'unidad-1', 'tema', 5, 'Disponible', '', 'activa', 1, 3),
+      (6, 'act-borrador', 1, 'unidad-1', 'tema', 6, 'Borrador docente', '', 'borrador', 1, 1),
+      (7, 'act-otra-edicion', 2, 'unidad-1', 'tema', 1, 'Otra edición', '', 'activa', 1, 1);
+    INSERT INTO habilitaciones_actividad (id, actividad_id, grupo_id, habilitada, disponible_desde, disponible_hasta) VALUES
+      (1, 2, 1, 0, NULL, NULL),
+      (2, 3, 1, 1, '2099-01-01T00:00:00Z', NULL),
+      (3, 4, 1, 1, NULL, '2020-01-01T00:00:00Z'),
+      (4, 5, 1, 1, NULL, NULL),
+      (5, 6, 1, 1, NULL, NULL);
+  `);
+  database.exec("INSERT INTO asignaciones_grupo (usuario_id, grupo_id, tipo, estado) VALUES (2, 1, 'docente', 'activa')");
+  // Participantes únicos: user 1 con dos intentos y user 3 con uno cuentan como dos estudiantes.
+  // Sólo puede existir un borrador en progreso por (actividad, habilitación, usuario) según
+  // idx_intentos_un_borrador_activo (migración 0010); el primero se anula antes del segundo.
+  const firstParticipantAttempt = insertAttempt(database, 5, 4, 1, 1, 1, "participante-u1-uno", 1);
+  database.exec(`UPDATE intentos_actividad SET estado = 'anulado' WHERE id = ${firstParticipantAttempt}`);
+  insertAttempt(database, 5, 4, 1, 2, 1, "participante-u1-dos", 1);
+  insertAttempt(database, 5, 4, 3, 1, 1, "participante-u3-uno", 1);
+
+  const teacherToken = await createSession(database, 2);
+  const studentToken = await createSession(database, 1);
+  const practicanteToken = await createSession(database, 4);
+  database.close();
+  database = undefined;
+  const port = await availablePort();
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const workerConfig = join(persistenceRoot, "wrangler.teacher-activities.json");
+  writeFileSync(workerConfig, JSON.stringify({
+    name: "profemacon-teacher-activities-test",
+    compatibility_date: "2026-07-20",
+    main: join(projectRoot, "worker", "index.ts"),
+    d1_databases: [{
+      binding: "DB",
+      database_name: "profemacon-beta-local",
+      database_id: "00000000-0000-0000-0000-000000000000",
+    }],
+  }));
+  localWorker = spawn(process.execPath, [
+    join(projectRoot, "node_modules", "wrangler", "bin", "wrangler.js"),
+    "dev", "--config", workerConfig, "--local", "--port", String(port), "--persist-to", persistenceRoot,
+  ], {
+    cwd: projectRoot,
+    stdio: ["ignore", "pipe", "pipe"],
+    env: { ...process.env, XDG_CONFIG_HOME: persistenceRoot },
+  });
+  localWorker.stdout.on("data", (chunk) => { workerOutput += String(chunk); });
+  localWorker.stderr.on("data", (chunk) => { workerOutput += String(chunk); });
+  localWorker.on("exit", () => { workerExited = true; });
+  await waitForWorker(baseUrl, () => workerOutput, () => workerExited);
+
+  const teacherGet = async (path, token = teacherToken) => {
+    const response = await fetch(`${baseUrl}${path}`, { headers: token ? { Cookie: `pm_session=${token}` } : {} });
+    return { response, body: await response.json() };
+  };
+  const putAvailability = async (groupId, activityId, body, options = {}) => {
+    const { token = teacherToken, origin = baseUrl } = options;
+    const headers = { Origin: origin, "Content-Type": "application/json" };
+    if (token) headers.Cookie = `pm_session=${token}`;
+    const response = await fetch(`${baseUrl}/api/teacher/groups/${groupId}/activities/${activityId}/availability`, {
+      method: "PUT", headers, body: JSON.stringify(body),
+    });
+    return { response, body: await response.json() };
+  };
+  const bySlug = (body) => Object.fromEntries(body.activities.map((activity) => [activity.slug, activity]));
+
+  // 1. Docente autorizado lista actividades del grupo.
+  const listing = await teacherGet("/api/teacher/groups/1/activities");
+  assert.equal(listing.response.status, 200);
+  assert.equal(listing.response.headers.get("Cache-Control"), "no-store");
+  assert.equal(listing.body.group.id, 1);
+  assert.equal(listing.body.group.editionId, 1);
+  const listedSlugs = listing.body.activities.map((activity) => activity.slug).sort();
+  assert.deepEqual(listedSlugs, ["act-borrador", "act-cerrada", "act-deshabilitada", "act-disponible", "act-no-abierta", "act-sin-habilitacion"]);
+  // 4. Actividad de otra edición/contexto no aparece.
+  assert.equal(listedSlugs.includes("act-otra-edicion"), false);
+
+  const activities = bySlug(listing.body);
+  // 2. Actividad compatible sin habilitación aparece.
+  assert.equal(activities["act-sin-habilitacion"].availabilityId, null);
+  assert.equal(activities["act-sin-habilitacion"].enabled, null);
+  // 5. availabilityStatus: disabled
+  assert.equal(activities["act-sin-habilitacion"].availabilityStatus, "disabled");
+  assert.equal(activities["act-deshabilitada"].availabilityStatus, "disabled");
+  // 5. availabilityStatus: not_open
+  assert.equal(activities["act-no-abierta"].availabilityStatus, "not_open");
+  // 5. availabilityStatus: closed
+  assert.equal(activities["act-cerrada"].availabilityStatus, "closed");
+  // 5. availabilityStatus: available
+  assert.equal(activities["act-disponible"].availabilityStatus, "available");
+  // 3. Actividad con habilitación aparece.
+  assert.equal(activities["act-disponible"].availabilityId, 4);
+  assert.equal(activities["act-disponible"].enabled, 1);
+  assert.equal(activities["act-no-abierta"].opensAt, "2099-01-01T00:00:00Z");
+  assert.equal(activities["act-cerrada"].closesAt, "2020-01-01T00:00:00Z");
+  // 6. Participantes únicos.
+  assert.equal(activities["act-disponible"].participants, 2);
+  assert.equal(activities["act-sin-habilitacion"].participants, 0);
+  assert.equal(activities["act-borrador"].participants, 0);
+  // 18. No exposición de claves/snapshots/respuestas.
+  const listingJson = JSON.stringify(listing.body);
+  for (const forbidden of ["clave_correccion_json", "respuesta_dada_json", "respuesta_normalizada_json", "correctAnswer", "\"modo\"", "explicacion_revision_final"]) {
+    assert.equal(listingJson.includes(forbidden), false, `El listado no debe incluir ${forbidden}`);
+  }
+
+  // 14. Grupo ajeno rechazado.
+  const foreignGroup = await teacherGet("/api/teacher/groups/2/activities");
+  assert.equal(foreignGroup.response.status, 403);
+  assert.equal(foreignGroup.body.code, "TEACHER_GROUP_REQUIRED");
+  const missingGroup = await teacherGet("/api/teacher/groups/999/activities");
+  assert.equal(missingGroup.response.status, 404);
+  assert.equal(missingGroup.body.code, "GROUP_NOT_FOUND");
+  // 15. Anónimo rechazado.
+  const anonymousListing = await teacherGet("/api/teacher/groups/1/activities", null);
+  assert.equal(anonymousListing.response.status, 401);
+  assert.equal(anonymousListing.response.headers.get("Cache-Control"), "no-store");
+  assert.equal(anonymousListing.body.code, "SESSION_REQUIRED");
+  // 16. Estudiante y practicante rechazados.
+  const studentListing = await teacherGet("/api/teacher/groups/1/activities", studentToken);
+  assert.equal(studentListing.response.status, 403);
+  assert.equal(studentListing.body.code, "TEACHER_ROLE_REQUIRED");
+  const practicanteListing = await teacherGet("/api/teacher/groups/1/activities", practicanteToken);
+  assert.equal(practicanteListing.response.status, 403);
+  assert.equal(practicanteListing.body.code, "TEACHER_ROLE_REQUIRED");
+
+  // 7. Guardar habilitación nueva.
+  const created = await putAvailability(1, 1, { enabled: true, opensAt: "2099-06-01T00:00:00Z", closesAt: "2099-06-02T00:00:00Z" });
+  assert.equal(created.response.status, 200);
+  assert.equal(created.response.headers.get("Cache-Control"), "no-store");
+  assert.deepEqual(created.body, { groupId: 1, activityId: 1, enabled: true, opensAt: "2099-06-01T00:00:00.000Z", closesAt: "2099-06-02T00:00:00.000Z" });
+  const afterCreate = await teacherGet("/api/teacher/groups/1/activities");
+  assert.equal(bySlug(afterCreate.body)["act-sin-habilitacion"].availabilityStatus, "not_open");
+  assert.equal(bySlug(afterCreate.body)["act-sin-habilitacion"].enabled, 1);
+  const createdRow = new DatabaseSync(databasePath);
+  assert.equal(createdRow.prepare("SELECT COUNT(*) AS total FROM habilitaciones_actividad WHERE actividad_id = 1 AND grupo_id = 1").get().total, 1);
+  createdRow.close();
+
+  // 8. Actualizar habilitación existente (act-deshabilitada estaba en 0).
+  const updated = await putAvailability(1, 2, { enabled: true, opensAt: null, closesAt: null });
+  assert.equal(updated.response.status, 200);
+  assert.deepEqual(updated.body, { groupId: 1, activityId: 2, enabled: true, opensAt: null, closesAt: null });
+  const afterUpdate = await teacherGet("/api/teacher/groups/1/activities");
+  assert.equal(bySlug(afterUpdate.body)["act-deshabilitada"].availabilityStatus, "available");
+  assert.equal(bySlug(afterUpdate.body)["act-deshabilitada"].enabled, 1);
+
+  // 9. Idempotencia razonable del PUT.
+  const repeated = await putAvailability(1, 2, { enabled: true, opensAt: null, closesAt: null });
+  assert.equal(repeated.response.status, 200);
+  assert.deepEqual(repeated.body, updated.body);
+  const idempotentRow = new DatabaseSync(databasePath);
+  assert.equal(idempotentRow.prepare("SELECT COUNT(*) AS total FROM habilitaciones_actividad WHERE actividad_id = 2 AND grupo_id = 1").get().total, 1);
+  idempotentRow.close();
+
+  // 10. enabled inválido rechazado.
+  const invalidEnabled = await putAvailability(1, 5, { enabled: "si", opensAt: null, closesAt: null });
+  assert.equal(invalidEnabled.response.status, 400);
+  assert.equal(invalidEnabled.body.code, "INVALID_REQUEST");
+  // 11. Fecha ISO UTC inválida rechazada.
+  const invalidDate = await putAvailability(1, 5, { enabled: true, opensAt: "ayer", closesAt: null });
+  assert.equal(invalidDate.response.status, 400);
+  assert.equal(invalidDate.body.code, "INVALID_DATE");
+  // 12. Apertura >= cierre rechazada.
+  const invalidWindow = await putAvailability(1, 5, { enabled: true, opensAt: "2099-06-02T00:00:00Z", closesAt: "2099-06-01T00:00:00Z" });
+  assert.equal(invalidWindow.response.status, 400);
+  assert.equal(invalidWindow.body.code, "INVALID_WINDOW");
+  // 13. Actividad de otra edición rechazada.
+  const otherEdition = await putAvailability(1, 7, { enabled: true, opensAt: null, closesAt: null });
+  assert.equal(otherEdition.response.status, 403);
+  assert.equal(otherEdition.body.code, "TEACHER_GROUP_REQUIRED");
+  // 14. Grupo ajeno rechazado (PUT).
+  const foreignPut = await putAvailability(2, 5, { enabled: true, opensAt: null, closesAt: null });
+  assert.equal(foreignPut.response.status, 403);
+  assert.equal(foreignPut.body.code, "TEACHER_GROUP_REQUIRED");
+  // 15. Anónimo rechazado (PUT).
+  const anonymousPut = await putAvailability(1, 5, { enabled: true, opensAt: null, closesAt: null }, { token: null });
+  assert.equal(anonymousPut.response.status, 401);
+  assert.equal(anonymousPut.body.code, "SESSION_REQUIRED");
+  // 16. Estudiante y practicante rechazados (PUT).
+  const studentPut = await putAvailability(1, 5, { enabled: true, opensAt: null, closesAt: null }, { token: studentToken });
+  assert.equal(studentPut.response.status, 403);
+  assert.equal(studentPut.body.code, "TEACHER_ROLE_REQUIRED");
+  const practicantePut = await putAvailability(1, 5, { enabled: true, opensAt: null, closesAt: null }, { token: practicanteToken });
+  assert.equal(practicantePut.response.status, 403);
+  assert.equal(practicantePut.body.code, "TEACHER_ROLE_REQUIRED");
+  // 17. INVALID_ORIGIN en PUT (se evalúa antes de la sesión).
+  const invalidOrigin = await putAvailability(1, 5, { enabled: true, opensAt: null, closesAt: null }, { token: null, origin: "http://evil.example" });
+  assert.equal(invalidOrigin.response.status, 403);
+  assert.equal(invalidOrigin.body.code, "INVALID_ORIGIN");
+  // 18. No exposición en la respuesta del PUT ni persistencia de snapshots/ respuestas.
+  const putJson = JSON.stringify([created.body, updated.body]);
+  for (const forbidden of ["clave_correccion_json", "respuesta_dada_json", "respuesta_normalizada_json", "correctAnswer", "\"modo\""]) {
+    assert.equal(putJson.includes(forbidden), false, `La habilitación no debe incluir ${forbidden}`);
+  }
+  // 19. Cache-Control: no-store ya verificado en GET y PUT arriba.
+  assert.equal(created.response.headers.get("Cache-Control"), "no-store");
+});
