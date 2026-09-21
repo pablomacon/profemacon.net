@@ -1,5 +1,6 @@
 import { listUserRoles } from "./auth";
 import { gradeActivity, publicCorrectAnswerForReview, type ActivityQuestionForGrading } from "./activity-grading";
+import { requireTeacherGroupScope } from "./teacher-group-scope";
 
 type PreviewActivity = {
   id: number;
@@ -45,12 +46,10 @@ async function authorizePreview(db: D1Database, userId: number, slug: string, gr
     `).bind(userId, activity.id).all<{ code: string; name: string }>();
     throw new TeacherPreviewError(400, "TEACHER_GROUP_REQUIRED", "Elegí un grupo asignado para probar la actividad.", groups.results);
   }
-  const assigned = await db.prepare(`
-    SELECT 1 FROM asignaciones_grupo ag JOIN grupos g ON g.id = ag.grupo_id
-    WHERE ag.usuario_id = ?1 AND ag.tipo = 'docente' AND ag.estado = 'activa' AND g.codigo = ?2
-    LIMIT 1
-  `).bind(userId, groupCode).first();
-  if (!assigned) throw new TeacherPreviewError(403, "TEACHER_GROUP_REQUIRED", "No tenés una asignación docente activa para ese grupo.");
+  const group = await db.prepare(`SELECT g.id FROM grupos g JOIN asignaciones_grupo ag ON ag.grupo_id=g.id
+    WHERE ag.usuario_id=?1 AND ag.tipo='docente' AND ag.estado='activa' AND g.codigo=?2 AND g.edicion_anual_id=(SELECT edicion_anual_id FROM actividades WHERE id=?3) LIMIT 1`).bind(userId, groupCode, activity.id).first<{ id: number }>();
+  if (!group) throw new TeacherPreviewError(403, "TEACHER_GROUP_REQUIRED", "No tenés una asignación docente activa para ese grupo.");
+  await requireTeacherGroupScope(db, userId, group.id, activity.id);
   return activity;
 }
 

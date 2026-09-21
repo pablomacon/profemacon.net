@@ -5,6 +5,7 @@ import { activateLocalAccount, clearSessionCookie, loginLocalAccount, readJsonBo
 import { applyStudentImport, previewStudentImport, readStudentImportBody, StudentImportError } from "./student-import";
 import { createOrRecoverStudentActivityAttempt, getStudentActivity, getStudentActivityDraft, getStudentActivityReview, saveStudentActivityAnswer, StudentActivityError, submitStudentActivityAttempt } from "./student-activity";
 import { getTeacherActivityPreview, gradeTeacherActivityPreview, TeacherPreviewError } from "./teacher-activity-preview";
+import { listTeacherGroups, requireTeacherGroupScope, TeacherGroupScopeError } from "./teacher-group-scope";
 
 export interface Env {
   DB: D1Database;
@@ -181,6 +182,22 @@ async function handleApi(request: Request, env: Env, url: URL) {
   }
 
   if (request.method !== "GET") return json({ error: "Método no permitido" }, 405);
+
+  if (url.pathname === "/api/teacher/groups") {
+    const user = await authenticateRequest(request, env.DB);
+    if (!user) return json({ code: "SESSION_REQUIRED", error: "Sesión requerida" }, 401);
+    try { return json(await listTeacherGroups(env.DB, user.id)); }
+    catch (error) { if (error instanceof TeacherGroupScopeError) return json({ code: error.code, error: error.message }, error.status); return json({ code: "INTERNAL_ERROR", error: "No fue posible consultar los grupos" }, 500); }
+  }
+  const teacherGroupMatch = /^\/api\/teacher\/groups\/([^/]+)$/.exec(url.pathname);
+  if (teacherGroupMatch) {
+    const user = await authenticateRequest(request, env.DB);
+    if (!user) return json({ code: "SESSION_REQUIRED", error: "Sesión requerida" }, 401);
+    const groupId = Number(teacherGroupMatch[1]);
+    if (!Number.isSafeInteger(groupId) || groupId <= 0) return json({ code: "GROUP_NOT_FOUND", error: "El grupo no fue encontrado." }, 404);
+    try { return json({ group: await requireTeacherGroupScope(env.DB, user.id, groupId) }); }
+    catch (error) { if (error instanceof TeacherGroupScopeError) return json({ code: error.code, error: error.message }, error.status); return json({ code: "INTERNAL_ERROR", error: "No fue posible consultar el grupo" }, 500); }
+  }
 
   const teacherPreviewMatch = /^\/api\/teacher\/activities\/([^/]+)\/preview$/.exec(url.pathname);
   if (teacherPreviewMatch) {

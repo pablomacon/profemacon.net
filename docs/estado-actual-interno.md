@@ -406,6 +406,10 @@ El orden recomendado es el siguiente.
 
 ### Hito 5 — Panel docente mínimo
 
+- Completado: alcance docente centralizado por grupo, listado real y resumen mínimo de grupos asignados.
+- Pendiente: actividades por grupo, habilitaciones, intentos y resultados.
+
+El Hito 5 comenzó con `requireTeacherGroupScope`: cada consulta docente exige sesión, rol `docente`, grupo existente y activo, asignación docente activa y, si hay actividad, coincidencia de edición anual. `groupId` interno se usa sólo como selector de routing, nunca como autorización. `GET /api/teacher/groups` lista únicamente los grupos autorizados y `GET /api/teacher/groups/:groupId` reutiliza el mismo alcance. `/docente` muestra la lista real y `/docente/grupos/:groupId` su resumen mínimo. El preview docente ahora también rechaza un `groupCode` de otra edición. Los Bloques B y C —actividades/habilitaciones y resultados— siguen pendientes.
 - Consultar grupos asignados.
 - Importar o aprobar inscripciones.
 - Habilitar actividades y fechas.
