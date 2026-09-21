@@ -273,6 +273,8 @@ Los enunciados y opciones se encuentran en `seed/actividades/`. Las claves priva
 
 El catálogo público ahora informa `attempts.reviewAvailable`, calculado exclusivamente con intentos propios `enviado`, para que el estudiante pueda abrir una revisión autorizada también al volver a ingresar después de agotar los cupos.
 
+El modo prueba docente está disponible mediante la ruta de desarrollo `/docente/actividades/variables-java-01/prueba` y también desde la acción mínima del panel docente. Requiere rol `docente` y una asignación activa al grupo de la misma edición académica; no reutiliza la disponibilidad estudiantil, por lo que permite comprobar actividades borrador, deshabilitadas o fuera de fecha. Consulta las preguntas actuales, corrige en el Worker con `activity-grading.ts` y transforma las claves sólo en respuestas pedagógicas públicas. No crea ni modifica intentos, respuestas, cupos, mejores resultados, calificaciones, estadísticas ni historial académico.
+
 ## 8. Estado de la D1 local
 
 Las migraciones `0001` a `0010` están disponibles y se verifican sobre D1 local limpia. La semilla aporta dos perfiles, una asignatura y un grupo de demostración; las pruebas de integración agregan una tercera cuenta y lotes, activaciones y eventos de auditoría exclusivamente ficticios. Esas cantidades pueden aumentar al repetir las comprobaciones y no deben tratarse como datos de referencia. Cada recorrido cierra su sesión al terminar.
@@ -343,7 +345,8 @@ No se deben introducir datos personales reales en semillas, fixtures, Markdown, 
 - Las preguntas y respuestas históricas de la Actividad 0 estuvieron versionadas y deben considerarse comprometidas. La autocorrección y las soluciones fueron retiradas del bundle actual, pero esas preguntas no deben reutilizarse como actividad evaluativa cuya seguridad dependa de mantener oculta la corrección.
 - Las rutas internas estáticas de las unidades todavía no están protegidas por pertenencia al catálogo; fue una decisión consciente fuera del alcance del Hito 3.
 - Los contenidos no están filtrados por publicación/grupo.
-- El modo prueba docente aún no está implementado. Los componentes de presentación de preguntas no dependen de D1 ni de roles, para poder reutilizarlos más adelante con una estrategia de persistencia no académica.
+- Los componentes de presentación de preguntas no dependen de D1 ni de roles, y ya se reutilizan por el modo prueba docente con una estrategia sin persistencia académica.
+- No existe todavía un panel docente completo ni editor de actividades; la entrada actual al modo prueba es deliberadamente mínima.
 - No hay flujo de restablecimiento de contraseña.
 - El importador tiene API, pantalla administrativa y cobertura de navegador para el estado inicial y la entrega individual; falta una prueba de integración real de todas las etapas contra D1.
 - No hay panel docente ni de practicante funcional.
@@ -398,7 +401,7 @@ El orden recomendado es el siguiente.
 - Completado: implementar `submit` idempotente, con autocorrección desde snapshots y persistencia atómica sin devolver respuestas correctas.
 - Completado: implementar GET separado de revisión final, autorizado y basado en snapshots.
 - Completado: construir frontend funcional genérico de actividad, con borrador, persistencia, entrega, resultado y revisión autorizada.
-- Siguiente mejora funcional: modo prueba docente sin intentos ni calificaciones académicas.
+- Completado: modo prueba docente sin persistencia académica, reutilizando los renderizadores de preguntas y el corrector del Worker.
 - Verificar las claves contra Neon antes de cualquier piloto real.
 
 ### Hito 5 — Panel docente mínimo
@@ -419,6 +422,6 @@ El orden recomendado es el siguiente.
 
 ## 13. Próximo trabajo concreto
 
-El próximo frente técnico antes de usar datos reales es preparar la configuración remota de `DOCUMENT_HMAC_KEY`. El **Hito 4 — Actividad 1 completa** está funcionalmente cerrado en entorno local: selección de grupo, borrador persistente, envío, resultado y revisión autorizada. La siguiente mejora funcional relevante es el modo prueba docente, sin intentos ni calificaciones académicas.
+El próximo frente técnico antes de usar datos reales es preparar la configuración remota de `DOCUMENT_HMAC_KEY`. El **Hito 4 — Actividad 1 completa** está funcionalmente cerrado en entorno local, incluido el modo prueba docente sin persistencia académica. El siguiente frente mayor es el **Hito 5 — Panel docente mínimo**.
 
 Hasta configurar y custodiar el secreto remoto no deben importarse cuentas reales. El portafolio de 2025 se mantiene únicamente como archivo de validación y no está mapeado a ningún grupo de D1.

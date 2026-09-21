@@ -4,6 +4,7 @@ import { listCoursesForUser } from "./course-catalog";
 import { activateLocalAccount, clearSessionCookie, loginLocalAccount, readJsonBody, requestHasValidOrigin, revokeLocalSession, sessionCookie } from "./local-auth";
 import { applyStudentImport, previewStudentImport, readStudentImportBody, StudentImportError } from "./student-import";
 import { createOrRecoverStudentActivityAttempt, getStudentActivity, getStudentActivityDraft, getStudentActivityReview, saveStudentActivityAnswer, StudentActivityError, submitStudentActivityAttempt } from "./student-activity";
+import { getTeacherActivityPreview, gradeTeacherActivityPreview, TeacherPreviewError } from "./teacher-activity-preview";
 
 export interface Env {
   DB: D1Database;
@@ -71,6 +72,22 @@ async function handleApi(request: Request, env: Env, url: URL) {
       if (error instanceof ActivationAdminError) return json({ error: error.message }, error.status);
       console.error("Fallo interno al reemitir una activación");
       return json({ error: "No fue posible reemitir la activación" }, 500);
+    }
+  }
+
+  const teacherPreviewGradeMatch = /^\/api\/teacher\/activities\/([^/]+)\/preview\/grade$/.exec(url.pathname);
+  if (request.method === "POST" && teacherPreviewGradeMatch) {
+    if (!requestHasValidOrigin(request)) return json({ error: "Origen de solicitud inválido" }, 403);
+    const user = await authenticateRequest(request, env.DB);
+    if (!user) return json({ code: "SESSION_REQUIRED", error: "Sesión requerida" }, 401);
+    const body = await readJsonBody(request);
+    if (!body || typeof body.groupCode !== "string") return json({ code: "INVALID_REQUEST", error: "La solicitud debe incluir grupo y respuestas válidas." }, 400);
+    try {
+      return json(await gradeTeacherActivityPreview(env.DB, user.id, decodeURIComponent(teacherPreviewGradeMatch[1]), body.groupCode, body.answers));
+    } catch (error) {
+      if (error instanceof TeacherPreviewError) return json({ code: error.code, error: error.message }, error.status);
+      console.error("Fallo interno al corregir una prueba docente");
+      return json({ code: "INTERNAL_ERROR", error: "No fue posible corregir la prueba docente" }, 500);
     }
   }
 
@@ -164,6 +181,19 @@ async function handleApi(request: Request, env: Env, url: URL) {
   }
 
   if (request.method !== "GET") return json({ error: "Método no permitido" }, 405);
+
+  const teacherPreviewMatch = /^\/api\/teacher\/activities\/([^/]+)\/preview$/.exec(url.pathname);
+  if (teacherPreviewMatch) {
+    const user = await authenticateRequest(request, env.DB);
+    if (!user) return json({ code: "SESSION_REQUIRED", error: "Sesión requerida" }, 401);
+    try {
+      return json(await getTeacherActivityPreview(env.DB, user.id, decodeURIComponent(teacherPreviewMatch[1]), url.searchParams.get("groupCode")));
+    } catch (error) {
+      if (error instanceof TeacherPreviewError) return json({ code: error.code, error: error.message, ...(error.groups ? { groups: error.groups } : {}) }, error.status);
+      console.error("Fallo interno al consultar una prueba docente");
+      return json({ code: "INTERNAL_ERROR", error: "No fue posible preparar la prueba docente" }, 500);
+    }
+  }
 
   const draftMatch = /^\/api\/me\/activities\/([^/]+)\/attempts\/([^/]+)$/.exec(url.pathname);
   if (draftMatch) {

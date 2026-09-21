@@ -218,6 +218,7 @@ h1 span { color: #978cda; }
 .activity-group-list, .activity-review-tabs { display: flex; flex-wrap: wrap; gap: 10px; margin: 20px 0; }
 .activity-review-tabs button { background: #29273a; border: 1px solid #57516f; border-radius: 7px; color: #efedf5; cursor: pointer; font: inherit; padding: 10px 13px; }
 .activity-result { background: #1b1c24; border: 1px solid #54506d; border-radius: 10px; margin: 22px 0; padding: 20px; }
+.activity-preview-note { border-left: 3px solid #aaa1ef; color: #d8d3eb; font-weight: 700; margin: 18px 0; padding-left: 12px; }
 .sr-only { clip: rect(0, 0, 0, 0); clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; }
 .session-summary { align-items: center; display: flex; gap: 12px; }
 .session-summary > span { color: #c9c6d3; font-size: 12px; font-weight: 700; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

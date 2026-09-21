@@ -181,6 +181,7 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
       (13, 19, 3, 'checkbox', 'Checkbox de entrega', '', '[]', '[]', NULL, 1, '{"modo":"seleccion-exacta","correctas":["a","c"]}', 'Feedback privado correcto', 'Feedback privado incorrecto'),
       (14, 21, 1, 'radio', 'Pregunta concurrente', '', '[]', '[]', NULL, 1, '{"modo":"opcion","correctas":["a"]}', '', '');
   `);
+  database.exec("INSERT INTO asignaciones_grupo (usuario_id, grupo_id, tipo, estado) VALUES (2, 1, 'docente', 'activa')");
   database.exec("UPDATE actividades SET mostrar_revision = 0 WHERE id = 20");
   const sentAttemptId = insertAttempt(database, 6, 8, 1, 1, 1, "agotada-uno");
   database.exec(`
@@ -304,11 +305,63 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
     });
     return { response, body: await response.json() };
   };
+  const preview = async (slug, groupCode = null, token = teacherToken) => {
+    const suffix = groupCode ? `?groupCode=${encodeURIComponent(groupCode)}` : "";
+    const response = await fetch(`${baseUrl}/api/teacher/activities/${slug}/preview${suffix}`, { headers: { Cookie: `pm_session=${token}` } });
+    return { response, body: await response.json() };
+  };
+  const gradePreview = async (slug, groupCode, answers, token = teacherToken) => {
+    const response = await fetch(`${baseUrl}/api/teacher/activities/${slug}/preview/grade`, {
+      method: "POST", headers: { Cookie: `pm_session=${token}`, Origin: baseUrl, "Content-Type": "application/json" }, body: JSON.stringify({ groupCode, answers }),
+    });
+    return { response, body: await response.json() };
+  };
 
   const anonymous = await fetch(`${baseUrl}/api/me/activities/actividad-publica`);
   assert.equal(anonymous.status, 401);
   assert.equal(anonymous.headers.get("Cache-Control"), "no-store");
   assert.equal((await anonymous.json()).code, "SESSION_REQUIRED");
+
+  const anonymousPreview = await fetch(`${baseUrl}/api/teacher/activities/actividad-submit/preview?groupCode=grupo-a`);
+  assert.equal(anonymousPreview.status, 401);
+  assert.equal(anonymousPreview.headers.get("Cache-Control"), "no-store");
+  const studentPreview = await preview("actividad-submit", "grupo-a", studentToken);
+  assert.equal(studentPreview.response.status, 403);
+  assert.equal(studentPreview.body.code, "TEACHER_ROLE_REQUIRED");
+  const teacherGroupSelector = await preview("actividad-submit");
+  assert.equal(teacherGroupSelector.response.status, 400);
+  assert.deepEqual(teacherGroupSelector.body.groups, [{ code: "grupo-a", name: "Grupo A" }]);
+  const foreignTeacherGroup = await preview("actividad-submit", "grupo-b");
+  assert.equal(foreignTeacherGroup.response.status, 403);
+  assert.equal(foreignTeacherGroup.body.code, "TEACHER_GROUP_REQUIRED");
+  const previewCurrent = await preview("actividad-submit", "grupo-a");
+  assert.equal(previewCurrent.response.status, 200);
+  assert.equal(previewCurrent.body.questions.length, 3);
+  assert.equal(JSON.stringify(previewCurrent.body).includes("clave_correccion_json"), false);
+  const previewDraft = await preview("actividad-borrador", "grupo-a");
+  assert.equal(previewDraft.response.status, 200);
+  const previewDisabled = await preview("actividad-deshabilitada", "grupo-a");
+  assert.equal(previewDisabled.response.status, 200);
+  const previewOutsideWindow = await preview("actividad-futura", "grupo-a");
+  assert.equal(previewOutsideWindow.response.status, 200);
+  const beforePreview = new DatabaseSync(databasePath);
+  const attemptsBefore = beforePreview.prepare("SELECT COUNT(*) AS count FROM intentos_actividad").get().count;
+  const answersBefore = beforePreview.prepare("SELECT COUNT(*) AS count FROM respuestas_intento_actividad").get().count;
+  const gradesBefore = beforePreview.prepare("SELECT COUNT(*) AS count FROM calificaciones_actividad").get().count;
+  beforePreview.close();
+  const previewGrade = await gradePreview("actividad-submit", "grupo-a", { 1: "b", 2: "valor", 3: ["a", "c"] });
+  assert.equal(previewGrade.response.status, 200);
+  assert.equal(previewGrade.body.score, 3);
+  assert.equal(previewGrade.body.percentage, 100);
+  assert.equal(previewGrade.body.judgment, "logrado");
+  assert.deepEqual(previewGrade.body.questions.map((question) => question.correct), [true, true, true]);
+  assert.equal(JSON.stringify(previewGrade.body).includes("clave_correccion_json"), false);
+  assert.equal(JSON.stringify(previewGrade.body).includes('"modo"'), false);
+  const afterPreview = new DatabaseSync(databasePath);
+  assert.equal(afterPreview.prepare("SELECT COUNT(*) AS count FROM intentos_actividad").get().count, attemptsBefore);
+  assert.equal(afterPreview.prepare("SELECT COUNT(*) AS count FROM respuestas_intento_actividad").get().count, answersBefore);
+  assert.equal(afterPreview.prepare("SELECT COUNT(*) AS count FROM calificaciones_actividad").get().count, gradesBefore);
+  afterPreview.close();
 
   const anonymousReview = await fetch(`${baseUrl}/api/me/activities/actividad-submit/review`);
   assert.equal(anonymousReview.status, 401);

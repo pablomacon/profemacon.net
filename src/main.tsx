@@ -4,13 +4,14 @@ import { Unit0 } from "./courses/programacion-i/unidad-0/lesson";
 import { Unit0Activity } from "./courses/programacion-i/unidad-0/activity";
 import { Unit1 } from "./courses/programacion-i/unidad-1/lesson";
 import { VariablesJavaActivity1 } from "./courses/programacion-i/unidad-1/activity-variables-01";
+import { TeacherActivityPreview } from "./teacher-activity-preview";
 import { Login } from "./login";
 import { ActivationManagement } from "./activation-management";
 import { StudentImportWizard } from "./student-import-wizard";
 import { MyCourses } from "./my-courses";
 import "./styles.css";
 
-type Route = "/" | "/ingresar" | "/mis-cursos" | "/historial" | "/docente" | "/docente/importar-estudiantes" | "/docente/activaciones" | "/practicante" | "/curso/programacion-i/unidad-0" | "/curso/programacion-i/unidad-0/actividad" | "/curso/programacion-i/unidad-1" | "/curso/programacion-i/unidad-1/actividad/variables-java-01";
+type Route = "/" | "/ingresar" | "/mis-cursos" | "/historial" | "/docente" | "/docente/importar-estudiantes" | "/docente/activaciones" | "/docente/actividades/variables-java-01/prueba" | "/practicante" | "/curso/programacion-i/unidad-0" | "/curso/programacion-i/unidad-0/actividad" | "/curso/programacion-i/unidad-1" | "/curso/programacion-i/unidad-1/actividad/variables-java-01";
 type Theme = "dark" | "light";
 type SessionUser = { id: number; username: string; displayName: string; email: string | null; roles: string[] };
 type SessionState =
@@ -27,7 +28,7 @@ const navigation: { label: string; path: Route; icon: string }[] = [
   { label: "Practicante", path: "/practicante", icon: "◇" },
 ];
 
-const supportedRoutes: Route[] = ["/", "/ingresar", "/mis-cursos", "/historial", "/docente", "/docente/importar-estudiantes", "/docente/activaciones", "/practicante", "/curso/programacion-i/unidad-0", "/curso/programacion-i/unidad-0/actividad", "/curso/programacion-i/unidad-1", "/curso/programacion-i/unidad-1/actividad/variables-java-01"];
+const supportedRoutes: Route[] = ["/", "/ingresar", "/mis-cursos", "/historial", "/docente", "/docente/importar-estudiantes", "/docente/activaciones", "/docente/actividades/variables-java-01/prueba", "/practicante", "/curso/programacion-i/unidad-0", "/curso/programacion-i/unidad-0/actividad", "/curso/programacion-i/unidad-1", "/curso/programacion-i/unidad-1/actividad/variables-java-01"];
 
 const navigate = (path: Route) => {
   window.history.pushState({}, "", path);
@@ -134,7 +135,7 @@ function Placeholder({ title, section, detail }: { title: string; section: strin
 function TeacherPanel({ user }: { user: SessionUser | null }) {
   if (!user) return <section className="placeholder-view"><p className="eyebrow">Administración</p><h1>Panel docente</h1><div className="placeholder-card"><div className="placeholder-mark">PM</div><div><h2>Sesión requerida</h2><p>Ingresá con una cuenta docente para administrar los grupos asignados.</p><button className="button-primary" onClick={() => navigate("/ingresar")}>Ingresar</button></div></div></section>;
   if (!user.roles.some((role) => role === "docente" || role === "administrador")) return <section className="placeholder-view"><p className="eyebrow">Administración</p><h1>Acceso restringido</h1><div className="placeholder-card"><div className="placeholder-mark">PM</div><div><h2>Esta cuenta no administra grupos</h2><p>El panel está disponible únicamente para docentes y administradores autorizados.</p></div></div></section>;
-  return <section className="teacher-view"><p className="eyebrow">Administración</p><h1>Panel docente</h1><p className="lead">Herramientas operativas para los grupos asignados.</p><div className="teacher-actions"><article className="module-card featured"><span className="module-icon">⇧</span><div><h2>Importar estudiantes</h2><p>Leer un portafolio, validar documentos y preparar cuentas con activación.</p></div><button onClick={() => navigate("/docente/importar-estudiantes")} aria-label="Importar estudiantes">→</button></article><article className="module-card"><span className="module-icon">↻</span><div><h2>Reemitir activación</h2><p>Revocar un código perdido o vencido y entregar uno nuevo de forma individual.</p></div><button onClick={() => navigate("/docente/activaciones")} aria-label="Administrar activaciones">→</button></article><article className="module-card"><span className="module-icon">□</span><div><h2>Grupos y actividades</h2><p>La habilitación de actividades y consulta de resultados se incorporará en el siguiente recorrido.</p></div></article></div></section>;
+  return <section className="teacher-view"><p className="eyebrow">Administración</p><h1>Panel docente</h1><p className="lead">Herramientas operativas para los grupos asignados.</p><div className="teacher-actions"><article className="module-card featured"><span className="module-icon">⇧</span><div><h2>Importar estudiantes</h2><p>Leer un portafolio, validar documentos y preparar cuentas con activación.</p></div><button onClick={() => navigate("/docente/importar-estudiantes")} aria-label="Importar estudiantes">→</button></article><article className="module-card"><span className="module-icon">↻</span><div><h2>Reemitir activación</h2><p>Revocar un código perdido o vencido y entregar uno nuevo de forma individual.</p></div><button onClick={() => navigate("/docente/activaciones")} aria-label="Administrar activaciones">→</button></article><article className="module-card"><span className="module-icon">✓</span><div><h2>Probar Actividad 1</h2><p>Simular Variables en Java sin crear resultados académicos.</p></div><button onClick={() => navigate("/docente/actividades/variables-java-01/prueba")} aria-label="Probar Actividad 1">→</button></article></div></section>;
 }
 
 function App() {
@@ -214,6 +215,7 @@ function App() {
     : route === "/docente" ? <TeacherPanel user={user} />
     : route === "/docente/importar-estudiantes" ? user?.roles.some((role) => role === "docente" || role === "administrador") ? <StudentImportWizard onBack={() => navigate("/docente")} /> : <TeacherPanel user={user} />
     : route === "/docente/activaciones" ? user?.roles.some((role) => role === "docente" || role === "administrador") ? <ActivationManagement onBack={() => navigate("/docente")} /> : <TeacherPanel user={user} />
+    : route === "/docente/actividades/variables-java-01/prueba" ? <TeacherActivityPreview slug="variables-java-01" onBack={() => navigate("/docente")} onLogin={() => navigate("/ingresar")} />
     : <Placeholder section="Acompañamiento" title="Panel de practicante" detail="Esta vista se limitará a los grupos asignados explícitamente." />;
 
   return <Layout route={route} theme={theme} user={user} onLogout={logout} onThemeChange={() => setTheme(theme === "dark" ? "light" : "dark")}>{view}</Layout>;
