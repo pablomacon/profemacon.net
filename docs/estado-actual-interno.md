@@ -54,6 +54,9 @@ La rama activa es `main`. Los checkpoints funcionales enviados a `origin/main` i
 - `349fd6c`: creación idempotente de intentos estudiantiles.
 - `cce5d51`: guardado de respuestas en borrador.
 - `d6f8ab9`: snapshots inmutables de preguntas por intento.
+- `f8f4c08`: entrega, corrección y resultado seguro del intento.
+- `fb7e4d4`: revisión final segura basada en snapshots.
+- `0ab70a1`: descubrimiento y recuperación persistente de borradores.
 
 El bloque de pruebas visuales y de navegador se mantiene separado para que sus referencias gráficas puedan revisarse en Git.
 
@@ -250,7 +253,7 @@ La migración `0008_snapshots_preguntas_intento.sql` incorpora `preguntas_intent
 
 `worker/activity-grading.ts` valida estrictamente claves, compatibilidad de tipos, respuestas checkbox y puntajes finitos, enteros seguros y positivos. Tiene pruebas unitarias con datos ficticios. Una barrera automatizada revisa archivos indexados y candidatos a Git para evitar incorporar claves privadas, incluso si se intenta forzar un archivo ignorado.
 
-La revisión completa utilizará un endpoint separado y todavía no está implementada. Sólo se habilitará según la política acordada y contará intentos `enviado`; el futuro POST de entrega nunca devolverá respuestas correctas, valores aceptados, opciones correctas ni la estructura de la clave.
+La revisión completa ya utiliza un endpoint separado, autorizado y basado en snapshots. Cuenta únicamente intentos `enviado`; los endpoints normales de catálogo, borrador, respuestas y entrega nunca devuelven respuestas correctas, valores aceptados, opciones correctas ni la estructura de la clave.
 
 ### 7.1. Piloto de Variables en Java
 
@@ -266,19 +269,9 @@ Existe un piloto local con:
 
 Los enunciados y opciones se encuentran en `seed/actividades/`. Las claves privadas están en `private/`, carpeta ignorada por Git. Las doce claves están cargadas en la D1 local, pero todavía deben verificarse contra la base Neon original antes de publicar.
 
-`worker/activity-grading.ts` se usa al finalizar un intento y recibe sólo snapshots privados y respuestas guardadas. La pantalla de la actividad todavía sólo explica su estado y no muestra preguntas.
+`worker/activity-grading.ts` se usa al finalizar un intento y recibe sólo snapshots privados y respuestas guardadas. El frontend genérico de actividades reutiliza contratos públicos: carga catálogo y borrador desde D1, guarda radio y checkbox inmediatamente, aplica debounce al texto, bloquea la entrega si hay respuestas incompletas o no persistidas, muestra el resultado público y consulta la revisión sólo bajo demanda. El piloto de Variables en Java se limita a aportar el `slug` y la ruta de entrada; no contiene lógica de corrección ni un motor específico.
 
-Falta implementar el circuito transaccional:
-
-1. autenticar al estudiante;
-2. comprobar inscripción activa y habilitación del grupo;
-3. comprobar fechas y cantidad de intentos;
-4. devolver preguntas sin claves privadas;
-5. aceptar respuestas;
-6. corregir exclusivamente en el Worker;
-7. guardar intento y respuestas como una operación coherente;
-8. devolver el resultado permitido por la configuración;
-9. conservar y mostrar el mejor resultado.
+El catálogo público ahora informa `attempts.reviewAvailable`, calculado exclusivamente con intentos propios `enviado`, para que el estudiante pueda abrir una revisión autorizada también al volver a ingresar después de agotar los cupos.
 
 ## 8. Estado de la D1 local
 
@@ -350,7 +343,7 @@ No se deben introducir datos personales reales en semillas, fixtures, Markdown, 
 - Las preguntas y respuestas históricas de la Actividad 0 estuvieron versionadas y deben considerarse comprometidas. La autocorrección y las soluciones fueron retiradas del bundle actual, pero esas preguntas no deben reutilizarse como actividad evaluativa cuya seguridad dependa de mantener oculta la corrección.
 - Las rutas internas estáticas de las unidades todavía no están protegidas por pertenencia al catálogo; fue una decisión consciente fuera del alcance del Hito 3.
 - Los contenidos no están filtrados por publicación/grupo.
-- Falta el frontend funcional de actividades.
+- El modo prueba docente aún no está implementado. Los componentes de presentación de preguntas no dependen de D1 ni de roles, para poder reutilizarlos más adelante con una estrategia de persistencia no académica.
 - No hay flujo de restablecimiento de contraseña.
 - El importador tiene API, pantalla administrativa y cobertura de navegador para el estado inicial y la entrega individual; falta una prueba de integración real de todas las etapas contra D1.
 - No hay panel docente ni de practicante funcional.
@@ -404,8 +397,8 @@ El orden recomendado es el siguiente.
 - Completado: persistir snapshots inmutables de preguntas por intento.
 - Completado: implementar `submit` idempotente, con autocorrección desde snapshots y persistencia atómica sin devolver respuestas correctas.
 - Completado: implementar GET separado de revisión final, autorizado y basado en snapshots.
-- Siguiente: construir el frontend funcional de la actividad.
-- Pendiente: mostrar devolución y mejor resultado dentro de esos flujos.
+- Completado: construir frontend funcional genérico de actividad, con borrador, persistencia, entrega, resultado y revisión autorizada.
+- Siguiente mejora funcional: modo prueba docente sin intentos ni calificaciones académicas.
 - Verificar las claves contra Neon antes de cualquier piloto real.
 
 ### Hito 5 — Panel docente mínimo
@@ -426,6 +419,6 @@ El orden recomendado es el siguiente.
 
 ## 13. Próximo trabajo concreto
 
-El próximo frente técnico antes de usar datos reales es preparar la configuración remota de `DOCUMENT_HMAC_KEY`. El siguiente bloque funcional del **Hito 4 — Actividad 1 completa** es el frontend funcional: selección de grupo, borrador, envío, resultado y revisión autorizada.
+El próximo frente técnico antes de usar datos reales es preparar la configuración remota de `DOCUMENT_HMAC_KEY`. El **Hito 4 — Actividad 1 completa** está funcionalmente cerrado en entorno local: selección de grupo, borrador persistente, envío, resultado y revisión autorizada. La siguiente mejora funcional relevante es el modo prueba docente, sin intentos ni calificaciones académicas.
 
 Hasta configurar y custodiar el secreto remoto no deben importarse cuentas reales. El portafolio de 2025 se mantiene únicamente como archivo de validación y no está mapeado a ningún grupo de D1.

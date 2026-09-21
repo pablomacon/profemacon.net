@@ -209,7 +209,7 @@ function App() {
     : route === "/curso/programacion-i/unidad-0" ? <Unit0 onBack={() => navigate("/mis-cursos")} onStartActivity={() => navigate("/curso/programacion-i/unidad-0/actividad")} theme={theme} />
     : route === "/curso/programacion-i/unidad-0/actividad" ? <Unit0Activity onBack={() => navigate("/curso/programacion-i/unidad-0")} />
     : route === "/curso/programacion-i/unidad-1" ? <Unit1 onBack={() => navigate("/mis-cursos")} onOpenActivity={() => navigate("/curso/programacion-i/unidad-1/actividad/variables-java-01")} theme={theme} />
-    : route === "/curso/programacion-i/unidad-1/actividad/variables-java-01" ? <VariablesJavaActivity1 onBack={() => navigate("/curso/programacion-i/unidad-1")} />
+    : route === "/curso/programacion-i/unidad-1/actividad/variables-java-01" ? <VariablesJavaActivity1 onBack={() => navigate("/curso/programacion-i/unidad-1")} onLogin={() => navigate("/ingresar")} />
     : route === "/historial" ? <Placeholder section="Archivo" title="Historial" detail="Los cursos archivados, resultados y materiales de solo lectura aparecerán en esta vista." />
     : route === "/docente" ? <TeacherPanel user={user} />
     : route === "/docente/importar-estudiantes" ? user?.roles.some((role) => role === "docente" || role === "administrador") ? <StudentImportWizard onBack={() => navigate("/docente")} /> : <TeacherPanel user={user} />

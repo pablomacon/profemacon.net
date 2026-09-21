@@ -213,7 +213,15 @@ async function summarizeAttempts(db: D1Database, activityId: number, accessId: n
       AND i.estado = 'en_progreso'
     LIMIT 1
   `).bind(activityId, accessId, userId).first<DraftRow>();
-  return { used: usedRow?.used ?? 0, best, draft };
+  const submittedRow = await db.prepare(`
+    SELECT COUNT(*) AS submitted
+    FROM intentos_actividad i
+    WHERE i.actividad_id = ?1
+      AND i.habilitacion_id = ?2
+      AND i.usuario_id = ?3
+      AND i.estado = 'enviado'
+  `).bind(activityId, accessId, userId).first<{ submitted: number }>();
+  return { used: usedRow?.used ?? 0, submitted: submittedRow?.submitted ?? 0, best, draft };
 }
 
 async function listPublicQuestions(db: D1Database, activityId: number) {
@@ -366,7 +374,7 @@ export async function getStudentActivity(db: D1Database, userId: number, slug: s
     );
   }
 
-  const { used, best, draft } = await summarizeAttempts(db, activity.id, access.habilitationId, userId);
+  const { used, submitted, best, draft } = await summarizeAttempts(db, activity.id, access.habilitationId, userId);
   const status = statusFor(access, used, activity.maxAttempts);
   const questions = status === "available" ? await listPublicQuestions(db, activity.id) : [];
 
@@ -392,6 +400,7 @@ export async function getStudentActivity(db: D1Database, userId: number, slug: s
     attempts: {
       used,
       remaining: Math.max(0, activity.maxAttempts - used),
+      reviewAvailable: activity.reviewEnabled === 1 && submitted >= activity.maxAttempts,
       best: best ? {
         number: best.number,
         ordinal: best.ordinal,

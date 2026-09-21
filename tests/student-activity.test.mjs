@@ -773,6 +773,10 @@ test("GET /api/me/activities/:slug aplica el contrato público con D1 local", as
   assert.equal(secondSubmitted.body.reviewAvailable, true);
   assert.equal(secondSubmitted.body.attempts.best.id, undefined);
   assert.equal(secondSubmitted.body.attempts.best.score, 3);
+  const finalizedCatalog = await get("/api/me/activities/actividad-submit");
+  assert.equal(finalizedCatalog.response.status, 200);
+  assert.equal(finalizedCatalog.body.attempts.draft, null);
+  assert.equal(finalizedCatalog.body.attempts.reviewAvailable, true);
   const changeOriginalAfterSubmit = new DatabaseSync(databasePath);
   changeOriginalAfterSubmit.exec(`
     UPDATE preguntas_actividad SET

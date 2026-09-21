@@ -16,7 +16,7 @@ const privatePathPatterns = [
 ];
 
 const privateStructurePatterns = [
-  /respuesta correcta\s*:/i,
+  /respuesta correcta\s*:\s*(?:["'`]|[a-z0-9])/i,
   /\bconst\s+correct\s*=/i,
   /"modo"\s*:\s*"(?:opcion|seleccion-exacta|texto-exacto)"/i,
 ];
@@ -49,4 +49,6 @@ test("permite referencias nulas y detecta asignaciones privadas sin imprimir su 
   assert.equal(containsPrivateStructure("clave_correccion_json = NULL"), false);
   assert.equal(containsPrivateStructure("claveCorreccionJson: null"), false);
   assert.equal(containsPrivateStructure("clave_correccion_json = '{dato-ficticio}'"), true);
+  assert.equal(containsPrivateStructure("<strong>Respuesta correcta:</strong> {question.correctAnswer}"), false);
+  assert.equal(containsPrivateStructure("Respuesta correcta: valor-privado"), true);
 });
