@@ -1,46 +1,9 @@
 import { useEffect, useState } from "react";
+import { activityAvailabilityText, attemptsText, judgmentText, type TeacherResultActivity, type TeacherResultBest, type TeacherResultGroup, type TeacherResultJudgment, type TeacherResultStudent } from "./teacher-results-shared";
 
-// Tipos y helpers de presentación para la matriz de resultados (C1). La vista
-// sólo representa lo que el backend ya calculó: nunca recalcula el juicio.
-
-export type TeacherResultGroup = {
-  id: number;
-  code: string;
-  name: string;
-  subjectCode: string;
-  subjectName: string;
-  editionId: number;
-  editionName: string;
-  year: number;
-  activeStudents: number;
-};
-
-export type TeacherResultActivity = {
-  id: number;
-  slug: string;
-  title: string;
-  unitCode: string | null;
-  editorialState: string;
-  availabilityStatus: "disabled" | "not_open" | "closed" | "available";
-  maxAttempts: number;
-};
-
-export type TeacherResultStudent = {
-  id: number;
-  displayName: string;
-  username: string;
-};
-
-export type TeacherResultJudgment = "inicial" | "en_proceso" | "logrado";
-
-export type TeacherResultBest = {
-  percentage: number;
-  score: number;
-  total: number;
-  judgment: TeacherResultJudgment;
-  ordinal: number | null;
-  submittedAt: string;
-};
+// La matriz de resultados (C1) sólo representa lo que el backend ya calculó:
+// nunca recalcula el juicio. Los tipos y las etiquetas compartidos con el
+// detalle por actividad (C2) viven en ./teacher-results-shared.
 
 export type TeacherResultCell = {
   studentId: number;
@@ -58,19 +21,6 @@ export type TeacherResultsPayload = {
   cells: TeacherResultCell[];
 };
 
-const activityAvailabilityText: Record<TeacherResultActivity["availabilityStatus"], string> = {
-  disabled: "No habilitada",
-  not_open: "Todavía no abierta",
-  closed: "Cerrada",
-  available: "Disponible",
-};
-
-const judgmentText: Record<TeacherResultJudgment, string> = {
-  inicial: "Inicial",
-  en_proceso: "En proceso",
-  logrado: "Logrado",
-};
-
 type TeacherResultCellState = {
   tone: TeacherResultJudgment | "draft-only" | "empty";
   label: string;
@@ -84,10 +34,6 @@ function cellState(cell: TeacherResultCell | undefined): TeacherResultCellState 
   }
   if (cell?.hasDraft) return { tone: "draft-only", label: "En progreso", percentage: null };
   return { tone: "empty", label: "Sin intento", percentage: null };
-}
-
-function attemptsText(attemptsUsed: number): string {
-  return attemptsUsed === 1 ? "1 intento" : `${attemptsUsed} intentos`;
 }
 
 // Etiqueta accesible completa para lectores de pantalla.
@@ -124,7 +70,7 @@ function MatrixCell({ label, tone, percentage, attemptsUsed, hasDraft }: {
   );
 }
 
-export function TeacherGroupResults({ groupId, onBack }: { groupId: number; onBack: () => void }) {
+export function TeacherGroupResults({ groupId, onBack, onOpenActivity }: { groupId: number; onBack: () => void; onOpenActivity: (activityId: number) => void }) {
   const [data, setData] = useState<TeacherResultsPayload | null>(null);
   const [error, setError] = useState("");
 
@@ -178,8 +124,10 @@ export function TeacherGroupResults({ groupId, onBack }: { groupId: number; onBa
                 <th scope="col" className="results-table-corner">Estudiante</th>
                 {data.activities.map((activity) => (
                   <th scope="col" key={activity.id} className="results-table-activity">
-                    <span className="results-activity-title">{activity.title}</span>
-                    <span className={`results-activity-status is-${activity.availabilityStatus}`}>{activityAvailabilityText[activity.availabilityStatus]}</span>
+                    <button type="button" className="results-activity-link" onClick={() => onOpenActivity(activity.id)} aria-label={`Ver detalle de ${activity.title}`}>
+                      <span className="results-activity-title">{activity.title}</span>
+                      <span className={`results-activity-status is-${activity.availabilityStatus}`}>{activityAvailabilityText[activity.availabilityStatus]}</span>
+                    </button>
                   </th>
                 ))}
               </tr>

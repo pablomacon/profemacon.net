@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --configLoader runner",
     "build": "tsc -b && vite build --configLoader runner",
-    "test": "node --test tests/auth-crypto.test.ts tests/student-import.test.ts tests/student-portfolio.test.mjs tests/activation-delivery.test.ts tests/account-activation-admin.test.ts tests/activity-grading.test.ts tests/private-activity-files.test.mjs tests/student-activity.test.mjs tests/teacher-group-results.test.mjs",
+    "test": "node --test tests/auth-crypto.test.ts tests/student-import.test.ts tests/student-portfolio.test.mjs tests/activation-delivery.test.ts tests/account-activation-admin.test.ts tests/activity-grading.test.ts tests/private-activity-files.test.mjs tests/student-activity.test.mjs tests/teacher-group-results.test.mjs tests/teacher-group-activity-results.test.mjs",
     "test:student-activity": "node --test tests/student-activity.test.mjs",
     "test:activity-migration:local": "node scripts/verify-activity-security-local.mjs",
     "test:e2e": "playwright test",

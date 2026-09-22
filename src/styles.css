@@ -355,6 +355,28 @@ h1 span { color: #978cda; }
 .result-cell-draft-only .result-cell-state { color: #c0b8f4; }
 .result-cell-empty { background: #15161c; border-left-color: #3a3b45; }
 .result-cell-empty .result-cell-state { color: #8f8e9a; }
+.results-activity-link { background: transparent; border: 0; cursor: pointer; display: block; font: inherit; padding: 0; text-align: left; width: 100%; }
+.results-activity-link:hover .results-activity-title { color: #c6bdfa; text-decoration: underline; }
+.results-activity-link:focus-visible { outline: 2px solid #aaa1ef; outline-offset: 3px; }
+
+/* Detalle de actividad (C2) */
+.activity-results-availability { color: #a1a1ad; font-size: 13px; margin: 18px 0 0; }
+.activity-results-availability .results-activity-status { display: inline; }
+.activity-results-meta { color: #8f8e9a; font-size: 12px; margin: 8px 0 0; }
+.activity-results-summary { display: grid; gap: 9px; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 30px 0 0; }
+.activity-results-summary-item { background: #121318; border: 1px solid #30313a; border-radius: 7px; padding: 13px; }
+.activity-results-summary-item dt { color: #8f8e9a; font-size: 10px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.activity-results-summary-item dd { color: #e8e5ef; font-size: 20px; font-weight: 800; margin: 6px 0 0; }
+.activity-results-controls { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+.activity-results-controls label { color: #a1a1ad; font-size: 12px; font-weight: 700; }
+.activity-results-controls select { background: #111217; border: 1px solid #4a4958; border-radius: 7px; color: #eceaf2; font: 500 13px/1.4 "Montserrat", sans-serif; padding: 9px 11px; }
+.activity-results-controls select:focus-visible { outline: 2px solid #aaa1ef; outline-offset: 2px; }
+.activity-results-note { background: rgba(120, 110, 178, .12); border: 1px solid #4b4670; border-radius: 8px; color: #c6c1e2; font-size: 13px; line-height: 1.6; margin: 24px 0 0; padding: 12px 14px; }
+.activity-results-table { min-width: 720px; }
+.activity-results-state { min-width: 108px; }
+.activity-results-best-value { color: #f1eff7; display: block; font-size: 17px; font-weight: 800; }
+.activity-results-best-detail { color: #8f8e9a; display: block; font-size: 11px; margin-top: 3px; }
+.activity-results-empty { color: #8f8e9a; }
 
 /* Modo claro */
 .theme-light { background: #f7f7fa; color: #24242d; }
@@ -437,6 +459,14 @@ h1 span { color: #978cda; }
 .theme-light .results-student-name, .theme-light .results-activity-title, .theme-light .result-cell-value { color: #302d3e; }
 .theme-light .result-cell { background: #fff; }
 .theme-light .result-cell-empty { background: #fafafc; }
+.theme-light .results-activity-link:hover .results-activity-title { color: #4b4275; }
+.theme-light .activity-results-summary-item { background: #fff; border-color: #dedce5; }
+.theme-light .activity-results-summary-item dd { color: #302d3e; }
+.theme-light .activity-results-best-value { color: #302d3e; }
+.theme-light .activity-results-controls select { background: #fff; border-color: #d8d6df; color: #383541; }
+.theme-light .activity-results-note { background: #f0edfb; border-color: #c9c3e3; color: #514979; }
+
+@media (max-width: 780px) { .activity-results-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 @media (max-width: 1100px) { .learning-plan.is-four { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 900px) { .module-grid, .learning-plan, .learning-plan.is-four, .login-view, .teacher-actions { grid-template-columns: 1fr; } .unit-figures { max-width: 650px; } .import-summary, .import-summary.source-summary { grid-template-columns: repeat(2, 1fr); } }

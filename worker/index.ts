@@ -8,6 +8,7 @@ import { getTeacherActivityPreview, gradeTeacherActivityPreview, TeacherPreviewE
 import { listTeacherGroups, requireTeacherGroupScope, TeacherGroupScopeError } from "./teacher-group-scope";
 import { listTeacherGroupActivities, saveTeacherAvailability, TeacherActivityManagementError } from "./teacher-group-activities";
 import { getTeacherGroupResults } from "./teacher-group-results";
+import { getTeacherGroupActivityResults } from "./teacher-group-activity-results";
 
 export interface Env {
   DB: D1Database;
@@ -205,6 +206,8 @@ async function handleApi(request: Request, env: Env, url: URL) {
   if(teacherActivitiesMatch){const user=await authenticateRequest(request,env.DB);if(!user)return json({code:"SESSION_REQUIRED",error:"Sesión requerida"},401);try{return json(await listTeacherGroupActivities(env.DB,user.id,Number(teacherActivitiesMatch[1])));}catch(error){if(error instanceof TeacherGroupScopeError)return json({code:error.code,error:error.message},error.status);return json({code:"INTERNAL_ERROR",error:"No fue posible consultar actividades"},500);}}
   const teacherResultsMatch = /^\/api\/teacher\/groups\/(\d+)\/results$/.exec(url.pathname);
   if(teacherResultsMatch){const user=await authenticateRequest(request,env.DB);if(!user)return json({code:"SESSION_REQUIRED",error:"Sesión requerida"},401);try{return json(await getTeacherGroupResults(env.DB,user.id,Number(teacherResultsMatch[1])));}catch(error){if(error instanceof TeacherGroupScopeError)return json({code:error.code,error:error.message},error.status);console.error("Fallo interno al consultar los resultados de un grupo");return json({code:"INTERNAL_ERROR",error:"No fue posible consultar los resultados"},500);}}
+  const teacherActivityResultsMatch = /^\/api\/teacher\/groups\/(\d+)\/activities\/(\d+)\/results$/.exec(url.pathname);
+  if(teacherActivityResultsMatch){const user=await authenticateRequest(request,env.DB);if(!user)return json({code:"SESSION_REQUIRED",error:"Sesión requerida"},401);try{return json(await getTeacherGroupActivityResults(env.DB,user.id,Number(teacherActivityResultsMatch[1]),Number(teacherActivityResultsMatch[2])));}catch(error){if(error instanceof TeacherGroupScopeError)return json({code:error.code,error:error.message},error.status);console.error("Fallo interno al consultar los resultados de una actividad");return json({code:"INTERNAL_ERROR",error:"No fue posible consultar los resultados de la actividad"},500);}}
   if (teacherGroupMatch) {
     const user = await authenticateRequest(request, env.DB);
     if (!user) return json({ code: "SESSION_REQUIRED", error: "Sesión requerida" }, 401);
