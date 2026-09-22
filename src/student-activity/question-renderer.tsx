@@ -1,3 +1,5 @@
+import { QuestionResources } from "./question-resources";
+
 export type PublicQuestion = {
   number: number;
   type: "radio" | "checkbox" | "text" | "ordenar" | "relacionar";
@@ -74,6 +76,7 @@ export function QuestionRenderer(props: Props) {
   return <article className="activity-question" data-question-number={props.question.number}>
     <div className="activity-question-heading"><span aria-hidden="true">{props.question.number}</span><div><h2>Pregunta {props.question.number}</h2><p>{props.question.prompt}</p></div></div>
     {props.question.instructions && <p className="activity-instructions">{props.question.instructions}</p>}
+    <QuestionResources resources={props.question.resources} />
     {Renderer ? <Renderer {...props} /> : <p role="alert" className="form-error">Este tipo de pregunta todavía no está disponible.</p>}
     <SaveStatus status={props.status} onRetry={props.onRetry} />
   </article>;

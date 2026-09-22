@@ -45,3 +45,52 @@ test("el preview docente es responsive y no muestra claves internas", async ({ p
   expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
   await expect(page.getByText("clave_correccion_json")).toHaveCount(0);
 });
+
+
+test("el preview docente muestra los mismos recursos image y code", async ({ page }) => {
+  const longLine = "String mensaje = \"línea deliberadamente larga para comprobar el desplazamiento horizontal del bloque de código\";";
+  const previewQuestions = [
+    {
+      number: 1, type: "radio", prompt: "Radio con recursos ficticios", instructions: "Mirá los recursos",
+      options: [{ valor: "a", texto: "A" }, { valor: "b", texto: "B" }],
+      resources: [
+        { type: "image", src: "/actividades/ficticias/q1.webp", alt: "Imagen ficticia del preview", caption: "Epígrafe ficticio" },
+        { type: "code", language: "java", content: `int edad = 15;\n${longLine}${longLine}`, title: "Ejemplo ficticio" },
+      ],
+      placeholder: null, points: 1,
+    },
+    {
+      number: 2, type: "checkbox", prompt: "Checkbox con recursos no representables", instructions: "Elegí",
+      options: [{ valor: "a", texto: "A" }, { valor: "c", texto: "C" }],
+      resources: [
+        { type: "video", src: "/medios/ficticio.mp4" },
+        { type: "image", src: "https://sitio-externo.test/x.webp", alt: "Imagen externa ficticia" },
+      ],
+      placeholder: null, points: 1,
+    },
+    { number: 3, type: "text", prompt: "Texto sin recursos", instructions: "Escribí", options: [], resources: [], placeholder: "Respuesta", points: 1 },
+  ];
+  await page.route("**/api/session", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ user: teacher }) }));
+  await page.route("**/api/teacher/activities/**", (route) => {
+    const url = new URL(route.request().url());
+    if (!url.searchParams.get("groupCode")) return route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ code: "TEACHER_GROUP_REQUIRED", error: "Elegí un grupo", groups: [{ code: "grupo-a", name: "Grupo A" }] }) });
+    return route.fulfill({ contentType: "application/json", body: JSON.stringify({ activity: { slug: "variables-java-01", title: "Actividad de prueba", description: "Versión borrador ficticia", totalPoints: 3 }, groupCode: "grupo-a", questions: previewQuestions }) });
+  });
+  await page.goto(previewRoute);
+  await page.getByRole("button", { name: "Grupo A" }).click();
+
+  const first = page.locator('[data-question-number="1"]');
+  await expect(first.getByRole("img")).toHaveAttribute("src", "/actividades/ficticias/q1.webp");
+  await expect(first.getByRole("img")).toHaveAttribute("alt", "Imagen ficticia del preview");
+  await expect(first.getByText("Epígrafe ficticio")).toBeVisible();
+  await expect(first.locator("pre code")).toContainText("int edad = 15;");
+  expect(await first.locator("pre code").evaluate((node) => node.textContent)).toBe(`int edad = 15;\n${longLine}${longLine}`);
+  expect(await first.locator("[data-resource-type]").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-resource-type")))).toEqual(["image", "code"]);
+
+  await expect(page.locator('[data-question-number="2"]').getByRole("img")).toHaveCount(0);
+  await expect(page.locator('[data-question-number="2"] .question-resources')).toHaveCount(0);
+  await expect(page.locator('[data-question-number="3"] .question-resources')).toHaveCount(0);
+  await expect(page.getByText("clave_correccion_json")).toHaveCount(0);
+  expect(await page.locator('[data-question-number="1"] pre').evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
+});

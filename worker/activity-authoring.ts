@@ -536,9 +536,6 @@ function parseResources(value: unknown, numero: number, collector: Collector): A
     }
     collector.fail("RESOURCE_INVALID", `${itemPath}.type`, "Tipos de recurso admitidos: image, code.");
   });
-  if (parsed.length > 0) {
-    collector.warn("RESOURCES_NOT_RENDERED", path, "Los recursos todavía no se muestran en la interfaz del estudiante.");
-  }
   return parsed;
 }
 

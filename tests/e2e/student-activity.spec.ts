@@ -175,6 +175,68 @@ test("presenta la segunda pestaña de revisión y destaca el mejor intento", asy
   expect(api.reviewRequests()).toBe(1);
 });
 
+test("muestra los recursos image y code del borrador y falla cerrado con los inválidos", async ({ page }) => {
+  const longLine = "String mensaje = \"línea deliberadamente larga para comprobar el desplazamiento horizontal del bloque de código\";";
+  const resourceQuestions = [
+    {
+      number: 1, type: "radio", prompt: "Pregunta con recursos ficticios", instructions: "Mirá los recursos antes de responder",
+      options: [{ valor: "a", texto: "Opción A" }, { valor: "b", texto: "Opción B" }],
+      resources: [
+        { type: "image", src: "/actividades/ficticias/q1.webp", alt: "Imagen ficticia de recursos", caption: "Epígrafe ficticio" },
+        { type: "code", language: "java", content: `int edad = 15;\n${longLine}${longLine}`, title: "Ejemplo ficticio" },
+      ],
+      placeholder: null, points: 1, answer: null,
+    },
+    {
+      number: 2, type: "radio", prompt: "Pregunta con recursos no representables",
+      options: [{ valor: "a", texto: "Opción A" }, { valor: "b", texto: "Opción B" }],
+      resources: [
+        { type: "video", src: "/medios/ficticio.mp4" },
+        { type: "image", src: "https://sitio-externo.test/x.webp", alt: "Imagen externa ficticia" },
+        { type: "image", src: "//sitio-relativo.test/x.webp", alt: "Imagen relativa ficticia" },
+        { type: "image", src: "/actividades/../ficticia.webp", alt: "Imagen con navegación ficticia" },
+        { type: "image", src: "/actividades/ficticias/q2.webp", alt: "" },
+        { type: "code", content: "" },
+      ],
+      placeholder: null, points: 1, answer: null,
+    },
+    {
+      number: 3, type: "text", prompt: "Pregunta sin recursos ficticios", instructions: "",
+      options: [], resources: [], placeholder: "Escribí algo", points: 1, answer: null,
+    },
+  ];
+  await session(page);
+  await page.route("**/api/me/activities/**", (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (/\/attempts\/5$/.test(path)) return route.fulfill({ contentType: "application/json", body: JSON.stringify({ activity: { slug: "actividad-ficticia", title: "Actividad ficticia", description: "", totalPoints: 3 }, access: { groupCode: "grupo-a", groupName: "Grupo ficticio" }, attempt: { id: 5, status: "en_progreso", number: 1, ordinal: 1, startedAt: "2026-01-01T00:00:00Z" }, questions: resourceQuestions }) });
+    return route.fulfill({ contentType: "application/json", body: JSON.stringify(catalog({ attemptId: 5, ordinal: 1, startedAt: "2026-01-01T00:00:00Z" })) });
+  });
+  await page.goto("/curso/programacion-i/unidad-1/actividad/variables-java-01");
+  await page.getByRole("button", { name: "Continuar intento" }).click();
+
+  const first = page.locator('[data-question-number="1"]');
+  await expect(first.getByRole("img")).toHaveAttribute("src", "/actividades/ficticias/q1.webp");
+  await expect(first.getByRole("img")).toHaveAttribute("alt", "Imagen ficticia de recursos");
+  await expect(first.getByRole("img")).toHaveAttribute("loading", "lazy");
+  await expect(first.getByText("Epígrafe ficticio")).toBeVisible();
+  await expect(first.getByText("Ejemplo ficticio")).toBeVisible();
+  await expect(first.locator("pre code")).toContainText("int edad = 15;");
+  expect(await first.locator("pre code").evaluate((node) => node.textContent)).toBe(`int edad = 15;\n${longLine}${longLine}`);
+  expect(await first.locator("[data-resource-type]").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-resource-type")))).toEqual(["image", "code"]);
+  expect(await page.locator("b").count()).toBe(0);
+  expect(await first.locator("pre").evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true);
+  await expect(first.getByLabel("Opción A")).toBeVisible();
+
+  const second = page.locator('[data-question-number="2"]');
+  await expect(second.getByRole("img")).toHaveCount(0);
+  await expect(second.locator("pre")).toHaveCount(0);
+  await expect(second.locator(".question-resources")).toHaveCount(0);
+  await expect(second.getByLabel("Opción A")).toBeVisible();
+  await expect(page.locator('[data-question-number="3"] .question-resources')).toHaveCount(0);
+
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
+});
+
 test("no muestra la solución correcta en el resultado previo a la revisión", async ({ page }) => {
   await session(page); await activityApi(page);
   await page.goto("/curso/programacion-i/unidad-1/actividad/variables-java-01");

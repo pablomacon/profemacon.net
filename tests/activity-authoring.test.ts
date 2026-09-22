@@ -419,7 +419,7 @@ test("emite las advertencias pedagógicas acordadas sin bloquear", () => {
   expectIssue(noExplanation, "EXPLANATION_MISSING", "warning");
 
   const valid = parseActivityDocument(document());
-  assert.ok(valid.issues.some((issue) => issue.code === "RESOURCES_NOT_RENDERED" && issue.severity === "warning"));
+  assert.equal(valid.issues.some((issue) => issue.code === "RESOURCES_NOT_RENDERED"), false, "los recursos ya se renderizan: la advertencia no debe emitirse");
   assert.ok(valid.issues.some((issue) => issue.code === "METADATA_ONLY_FIELDS" && issue.severity === "note"));
   assert.equal(valid.ok, true, "las advertencias no impiden publicar");
 });
