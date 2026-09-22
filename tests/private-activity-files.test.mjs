@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { assertPublicProjection } from "../worker/activity-authoring.ts";
 
 const repositoryFiles = execFileSync(
   "git",
@@ -30,6 +31,14 @@ const containsPrivateStructure = (source) => {
   return assignedValues.some((match) => match[1].trim().toLowerCase() !== "null");
 };
 
+// La proyección pública que produce el pipeline de autoría nunca debe contener
+// material de corrección. Se revisan sus claves JSON y, además, su estructura.
+const authoringCanonicalPatterns = [
+  /"(?:grading|correct|accepted)"\s*:/i,
+  /"(?:modo|correctas|aceptadas)"\s*:/i,
+  /clave_correccion/i,
+];
+
 test("no hay archivos de claves privadas candidatos a incorporarse a Git", () => {
   const unsafe = repositoryFiles.filter((path) => privatePathPatterns.some((pattern) => pattern.test(path)));
   assert.deepEqual(unsafe, [], `Se detectaron rutas reservadas para material privado: ${unsafe.join(", ")}`);
@@ -51,4 +60,26 @@ test("permite referencias nulas y detecta asignaciones privadas sin imprimir su 
   assert.equal(containsPrivateStructure("clave_correccion_json = '{dato-ficticio}'"), true);
   assert.equal(containsPrivateStructure("<strong>Respuesta correcta:</strong> {question.correctAnswer}"), false);
   assert.equal(containsPrivateStructure("Respuesta correcta: valor-privado"), true);
+});
+
+test("las proyecciones públicas de authoring no contienen material de corrección", () => {
+  const authoringJson = repositoryFiles.filter((path) => /^authoring\/.*\.json$/.test(path));
+  const unsafe = [];
+  for (const path of authoringJson) {
+    const source = readFileSync(path, "utf8");
+    if (authoringCanonicalPatterns.some((pattern) => pattern.test(source))) {
+      unsafe.push(`${path} (patrón de corrección)`);
+      continue;
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(source);
+    } catch {
+      unsafe.push(`${path} (JSON inválido)`);
+      continue;
+    }
+    if (assertPublicProjection(parsed).length > 0) unsafe.push(`${path} (estructura privada)`);
+  }
+
+  assert.deepEqual(unsafe, [], `Se detectó material privado en proyecciones públicas: ${unsafe.join(", ")}`);
 });

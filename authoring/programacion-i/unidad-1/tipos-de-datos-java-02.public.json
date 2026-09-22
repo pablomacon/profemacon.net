@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "activity": {
+    "slug": "tipos-de-datos-java-02",
+    "title": "Tipos de datos en Java — Actividad 2",
+    "description": "Actividad de práctica sobre tipos primitivos, declaración y asignación en Java. Respondé todas las preguntas antes de entregar.",
+    "topic": "Tipos de datos en Java",
+    "unitCode": "unidad-1",
+    "order": 2,
+    "edition": {
+      "subjectCode": "programacion-i",
+      "year": 2026
+    },
+    "maxAttempts": 2,
+    "showReview": true,
+    "approvalThreshold": 50,
+    "achievementThreshold": 76,
+    "editorialState": "draft"
+  },
+  "questions": [
+    {
+      "number": 1,
+      "type": "radio",
+      "prompt": "¿Qué tipo de dato usarías para guardar la edad de una persona?",
+      "points": 2,
+      "instructions": "Elegí una sola opción.",
+      "options": [
+        {
+          "value": "a",
+          "text": "int"
+        },
+        {
+          "value": "b",
+          "text": "String"
+        },
+        {
+          "value": "c",
+          "text": "boolean"
+        },
+        {
+          "value": "d",
+          "text": "char"
+        }
+      ],
+      "explanation": "Una edad se representa con un número entero: el tipo primitivo adecuado es int.",
+      "resources": [
+        {
+          "type": "image",
+          "src": "/actividades/programacion-i/unidad-1/tipos-de-datos-java-02/tabla-tipos.webp",
+          "alt": "Tabla con los tipos primitivos de Java y el rango de valores que admite cada uno",
+          "caption": "Tipos primitivos de Java"
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "type": "checkbox",
+      "prompt": "Seleccioná todos los tipos numéricos primitivos de Java.",
+      "points": 3,
+      "instructions": "Podés marcar más de una opción.",
+      "options": [
+        {
+          "value": "a",
+          "text": "int"
+        },
+        {
+          "value": "b",
+          "text": "double"
+        },
+        {
+          "value": "c",
+          "text": "boolean"
+        },
+        {
+          "value": "d",
+          "text": "char"
+        }
+      ],
+      "explanation": "int y double representan valores numéricos; boolean representa verdadero o falso y char un único carácter.",
+      "feedback": {
+        "whenCorrect": "Reconociste correctamente los tipos numéricos.",
+        "whenIncorrect": "Repasá la diferencia entre tipos numéricos, lógicos y de carácter."
+      }
+    },
+    {
+      "number": 3,
+      "type": "text",
+      "prompt": "Escribí el tipo primitivo de Java que se usa para guardar un número entero.",
+      "points": 2,
+      "instructions": "Escribí sólo el nombre del tipo, sin punto y coma.",
+      "placeholder": "Escribí tu respuesta",
+      "explanation": "El tipo primitivo para números enteros en Java es int.",
+      "resources": [
+        {
+          "type": "code",
+          "language": "java",
+          "content": "int edad = 15;\nedad = 22;\nSystem.out.println(edad);",
+          "title": "Declaración y actualización de una variable entera"
+        }
+      ]
+    }
+  ],
+  "tags": [
+    "tipos-de-datos",
+    "primitivos",
+    "java"
+  ],
+  "authoring": {
+    "createdBy": "profe-macon-ai-workflow",
+    "version": 1,
+    "notes": "Documento ficticio de aceptación del pipeline de autoría (Hito 6A). No corresponde a ninguna actividad real.",
+    "generatedAt": "2026-09-22T00:00:00Z"
+  }
+}
