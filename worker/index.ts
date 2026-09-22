@@ -10,6 +10,7 @@ import { listTeacherGroupActivities, saveTeacherAvailability, TeacherActivityMan
 import { getTeacherGroupResults } from "./teacher-group-results";
 import { getTeacherGroupActivityResults } from "./teacher-group-activity-results";
 import { getTeacherGroupStudentResults } from "./teacher-group-student-results";
+import { getTeacherGroupStudentAttempts } from "./teacher-group-student-attempts";
 
 export interface Env {
   DB: D1Database;
@@ -211,6 +212,8 @@ async function handleApi(request: Request, env: Env, url: URL) {
   if(teacherActivityResultsMatch){const user=await authenticateRequest(request,env.DB);if(!user)return json({code:"SESSION_REQUIRED",error:"Sesión requerida"},401);try{return json(await getTeacherGroupActivityResults(env.DB,user.id,Number(teacherActivityResultsMatch[1]),Number(teacherActivityResultsMatch[2])));}catch(error){if(error instanceof TeacherGroupScopeError)return json({code:error.code,error:error.message},error.status);console.error("Fallo interno al consultar los resultados de una actividad");return json({code:"INTERNAL_ERROR",error:"No fue posible consultar los resultados de la actividad"},500);}}
   const teacherStudentResultsMatch = /^\/api\/teacher\/groups\/(\d+)\/students\/(\d+)\/results$/.exec(url.pathname);
   if(teacherStudentResultsMatch){const user=await authenticateRequest(request,env.DB);if(!user)return json({code:"SESSION_REQUIRED",error:"Sesión requerida"},401);try{return json(await getTeacherGroupStudentResults(env.DB,user.id,Number(teacherStudentResultsMatch[1]),Number(teacherStudentResultsMatch[2])));}catch(error){if(error instanceof TeacherGroupScopeError)return json({code:error.code,error:error.message},error.status);console.error("Fallo interno al consultar los resultados de un estudiante");return json({code:"INTERNAL_ERROR",error:"No fue posible consultar los resultados del estudiante"},500);}}
+  const teacherStudentAttemptsMatch = /^\/api\/teacher\/groups\/(\d+)\/students\/(\d+)\/activities\/(\d+)\/attempts$/.exec(url.pathname);
+  if(teacherStudentAttemptsMatch){const user=await authenticateRequest(request,env.DB);if(!user)return json({code:"SESSION_REQUIRED",error:"Sesión requerida"},401);try{return json(await getTeacherGroupStudentAttempts(env.DB,user.id,Number(teacherStudentAttemptsMatch[1]),Number(teacherStudentAttemptsMatch[2]),Number(teacherStudentAttemptsMatch[3])));}catch(error){if(error instanceof TeacherGroupScopeError)return json({code:error.code,error:error.message},error.status);console.error("Fallo interno al consultar los intentos de un estudiante");return json({code:"INTERNAL_ERROR",error:"No fue posible consultar los intentos del estudiante"},500);}}
   if (teacherGroupMatch) {
     const user = await authenticateRequest(request, env.DB);
     if (!user) return json({ code: "SESSION_REQUIRED", error: "Sesión requerida" }, 401);

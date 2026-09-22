@@ -115,7 +115,7 @@ async function get<T>(url: string) {
   return body;
 }
 
-export function TeacherGroupStudentResults({ groupId, studentId, onBack }: { groupId: number; studentId: number; onBack: () => void }) {
+export function TeacherGroupStudentResults({ groupId, studentId, onBack, onOpenActivity }: { groupId: number; studentId: number; onBack: () => void; onOpenActivity: (activityId: number) => void }) {
   const [data, setData] = useState<TeacherStudentResultsPayload | null>(null);
   const [error, setError] = useState("");
   const [sort, setSort] = useState<StudentResultsSort>("natural");
@@ -211,8 +211,10 @@ export function TeacherGroupStudentResults({ groupId, studentId, onBack }: { gro
                   return (
                     <tr key={activity.activityId}>
                       <th scope="row" className="results-table-student">
-                        <span className="results-student-name">{activity.title}</span>
-                        <span className="results-student-username">{activity.unitCode ?? "Sin unidad"} · {activity.editorialState}</span>
+                        <button type="button" className="results-activity-link" onClick={() => onOpenActivity(activity.activityId)} aria-label={`Ver intentos de ${activity.title}`}>
+                          <span className="results-student-name">{activity.title}</span>
+                          <span className="results-student-username">{activity.unitCode ?? "Sin unidad"} · {activity.editorialState}</span>
+                        </button>
                       </th>
                       <td>
                         <span className={`results-activity-status is-${activity.availabilityStatus}`}>{activityAvailabilityText[activity.availabilityStatus]}</span>

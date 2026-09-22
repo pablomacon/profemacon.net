@@ -1,7 +1,7 @@
 import { listUserRoles } from "./auth";
 
 export class TeacherGroupScopeError extends Error {
-  constructor(public readonly status: 403 | 404, public readonly code: "TEACHER_ROLE_REQUIRED" | "TEACHER_GROUP_REQUIRED" | "GROUP_NOT_FOUND" | "STUDENT_NOT_FOUND", message: string) { super(message); }
+  constructor(public readonly status: 403 | 404, public readonly code: "TEACHER_ROLE_REQUIRED" | "TEACHER_GROUP_REQUIRED" | "GROUP_NOT_FOUND" | "STUDENT_NOT_FOUND" | "ACTIVITY_NOT_FOUND", message: string) { super(message); }
 }
 
 export type TeacherGroupScope = { id: number; code: string; name: string; subjectCode: string; subjectName: string; editionId: number; editionName: string; year: number; activeStudents: number };
@@ -48,6 +48,20 @@ export async function requireTeacherGroupStudentScope(db: D1Database, userId: nu
   if (!student) {
     const exists = await db.prepare("SELECT 1 FROM usuarios WHERE id = ?1").bind(studentId).first();
     throw new TeacherGroupScopeError(exists ? 403 : 404, exists ? "TEACHER_GROUP_REQUIRED" : "STUDENT_NOT_FOUND", exists ? "El estudiante no pertenece a este grupo." : "El estudiante no fue encontrado.");
+  }
+  return { group, student };
+}
+
+// C4: compone el alcance de estudiante con la validación de actividad. La
+// actividad sólo debe pertenecer a la edición anual del grupo autorizado: su
+// estado editorial y su disponibilidad no condicionan la lectura, igual que en
+// C1/C2/C3. `activityId` es también un selector de routing y nunca autoriza solo.
+export async function requireTeacherGroupStudentActivityScope(db: D1Database, userId: number, groupId: number, studentId: number, activityId: number) {
+  const { group, student } = await requireTeacherGroupStudentScope(db, userId, groupId, studentId);
+  const matches = await db.prepare("SELECT 1 FROM actividades WHERE id=?1 AND edicion_anual_id=?2").bind(activityId, group.editionId).first();
+  if (!matches) {
+    const exists = await db.prepare("SELECT 1 FROM actividades WHERE id=?1").bind(activityId).first();
+    throw new TeacherGroupScopeError(exists ? 403 : 404, exists ? "TEACHER_GROUP_REQUIRED" : "ACTIVITY_NOT_FOUND", exists ? "La actividad no corresponde a este grupo." : "La actividad no fue encontrada.");
   }
   return { group, student };
 }

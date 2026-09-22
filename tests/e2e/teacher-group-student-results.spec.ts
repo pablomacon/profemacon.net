@@ -102,6 +102,17 @@ async function mockStudentResults(page: Page, options: { results?: ResultsFixtur
     }
     return route.fulfill({ contentType: "application/json", body: JSON.stringify(results) });
   });
+  // Destino de la navegación por actividad (contrato C4): sólo para comprobar que
+  // el nombre de la actividad abre sus intentos.
+  await page.route("**/api/teacher/groups/7/students/3/activities/*/attempts", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({
+    group,
+    student,
+    activity: { activityId: 101, slug: "variables-java-01", title: "Variables en Java", unitCode: "unidad-1", editorialState: "activa", availabilityStatus: "available", maxAttempts: 10 },
+    summary: { attemptsUsed: 0, submittedCount: 0, annulledCount: 0, best: null, judgment: null, lastSubmittedAt: null, hasDraft: false, draftStartedAt: null },
+    submittedAttempts: [],
+    annulledAttempts: [],
+    defaultAttemptId: null,
+  }) }));
   return { requests };
 }
 
@@ -356,13 +367,18 @@ test("no desborda el documento y la tabla hace su propio scroll horizontal", asy
   expect(table.width).toBeGreaterThanOrEqual(900);
 });
 
-test("no expone todavía navegación hacia el detalle de intentos", async ({ page }) => {
+test("abre los intentos de una actividad desde su nombre y vuelve a C3", async ({ page }) => {
   await mockStudentResults(page);
   await page.goto("/docente/grupos/7/estudiantes/3/resultados");
   await expect(page.locator(".student-results-table")).toBeVisible();
 
-  // Sin botones ni enlaces hacia C4: la actividad todavía no es clickeable.
-  await expect(page.getByRole("button", { name: /Ver intentos/ })).toHaveCount(0);
-  await expect(rowOf(page, "Actividad evolución").getByRole("button")).toHaveCount(0);
-  await expect(rowOf(page, "Variables en Java").getByRole("button")).toHaveCount(0);
+  // Sólo el nombre de la actividad abre sus intentos; la fila no es clickeable.
+  await expect(rowOf(page, "Variables en Java").getByRole("button")).toHaveCount(1);
+  await page.getByRole("button", { name: "Ver intentos de Variables en Java" }).click();
+  await expect(page).toHaveURL(/\/docente\/grupos\/7\/estudiantes\/3\/actividades\/101\/intentos$/);
+  await expect(page.getByRole("heading", { name: "Alumno Alfa" })).toBeVisible();
+
+  await page.getByRole("button", { name: "← Volver a resultados del estudiante" }).click();
+  await expect(page).toHaveURL(/\/docente\/grupos\/7\/estudiantes\/3\/resultados$/);
+  await expect(page.locator(".student-results-table")).toBeVisible();
 });
