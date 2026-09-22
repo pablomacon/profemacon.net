@@ -378,6 +378,12 @@ h1 span { color: #978cda; }
 .activity-results-best-detail { color: #8f8e9a; display: block; font-size: 11px; margin-top: 3px; }
 .activity-results-empty { color: #8f8e9a; }
 
+/* Detalle de estudiante (C3) */
+.student-results-group { color: #cfcdd8; font-size: 14px; margin: 18px 0 0; }
+.student-results-table { min-width: 900px; }
+.student-results-table .results-activity-status { display: inline; }
+.student-results-evolution { color: #dedde5; font-size: 13px; font-weight: 700; }
+
 /* Modo claro */
 .theme-light { background: #f7f7fa; color: #24242d; }
 .theme-light .sidebar { background: #efeff4; border-color: #dddde5; }
@@ -465,6 +471,8 @@ h1 span { color: #978cda; }
 .theme-light .activity-results-best-value { color: #302d3e; }
 .theme-light .activity-results-controls select { background: #fff; border-color: #d8d6df; color: #383541; }
 .theme-light .activity-results-note { background: #f0edfb; border-color: #c9c3e3; color: #514979; }
+.theme-light .student-results-group { color: #4e4a56; }
+.theme-light .student-results-evolution { color: #302d3e; }
 
 @media (max-width: 780px) { .activity-results-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 

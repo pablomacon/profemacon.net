@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import {
   activityAvailabilityText,
   attemptsText,
+  formatLocalDateTime,
   judgmentText,
+  percentText,
   type TeacherResultActivity,
   type TeacherResultBest,
   type TeacherResultGroup,
@@ -93,20 +95,8 @@ async function get<T>(url: string) {
   return body;
 }
 
-// Presentación propia de C2: los porcentajes llegan ya redondeados por el
-// backend y la fecha se muestra en hora local, nunca como ISO crudo.
-function percentText(percentage: number | null): string {
-  return percentage === null ? "—" : `${percentage}%`;
-}
-
-function formatLocalDateTime(iso: string | null): string {
-  if (!iso) return "—";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
-}
-
-export function TeacherGroupActivityResults({ groupId, activityId, onBack }: { groupId: number; activityId: number; onBack: () => void }) {
+// El formato de porcentajes y de fechas locales vive en el módulo compartido.
+export function TeacherGroupActivityResults({ groupId, activityId, onBack, onOpenStudent }: { groupId: number; activityId: number; onBack: () => void; onOpenStudent: (studentId: number) => void }) {
   const [data, setData] = useState<TeacherActivityResultsPayload | null>(null);
   const [error, setError] = useState("");
   const [sort, setSort] = useState<ActivityResultsSort>("name");
@@ -215,8 +205,10 @@ export function TeacherGroupActivityResults({ groupId, activityId, onBack }: { g
                   return (
                     <tr key={student.studentId}>
                       <th scope="row" className="results-table-student">
-                        <span className="results-student-name">{student.displayName}</span>
-                        <span className="results-student-username">{student.username}</span>
+                        <button type="button" className="results-activity-link" onClick={() => onOpenStudent(student.studentId)} aria-label={`Ver detalle de ${student.displayName}`}>
+                          <span className="results-student-name">{student.displayName}</span>
+                          <span className="results-student-username">{student.username}</span>
+                        </button>
                       </th>
                       <td>
                         {student.best ? (

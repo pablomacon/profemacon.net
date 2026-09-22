@@ -70,7 +70,7 @@ function MatrixCell({ label, tone, percentage, attemptsUsed, hasDraft }: {
   );
 }
 
-export function TeacherGroupResults({ groupId, onBack, onOpenActivity }: { groupId: number; onBack: () => void; onOpenActivity: (activityId: number) => void }) {
+export function TeacherGroupResults({ groupId, onBack, onOpenActivity, onOpenStudent }: { groupId: number; onBack: () => void; onOpenActivity: (activityId: number) => void; onOpenStudent: (studentId: number) => void }) {
   const [data, setData] = useState<TeacherResultsPayload | null>(null);
   const [error, setError] = useState("");
 
@@ -136,8 +136,10 @@ export function TeacherGroupResults({ groupId, onBack, onOpenActivity }: { group
               {data.students.map((student) => (
                 <tr key={student.id}>
                   <th scope="row" className="results-table-student">
-                    <span className="results-student-name">{student.displayName}</span>
-                    <span className="results-student-username">{student.username}</span>
+                    <button type="button" className="results-activity-link" onClick={() => onOpenStudent(student.id)} aria-label={`Ver detalle de ${student.displayName}`}>
+                      <span className="results-student-name">{student.displayName}</span>
+                      <span className="results-student-username">{student.username}</span>
+                    </button>
                   </th>
                   {data.activities.map((activity) => {
                     const cell = cellOf(student.id, activity.id);

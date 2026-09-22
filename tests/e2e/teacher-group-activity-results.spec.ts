@@ -91,6 +91,14 @@ async function mockActivityResults(page: Page, options: { results?: ResultsFixtu
     }
     return route.fulfill({ contentType: "application/json", body: JSON.stringify(results) });
   });
+  // Destino de la navegación por estudiante (contrato C3): sólo para comprobar
+  // que el nombre del estudiante abre su propio detalle.
+  await page.route("**/api/teacher/groups/7/students/3/results", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({
+    group,
+    student: { id: 3, displayName: "Alumno Alfa", username: "alumno-alfa" },
+    summary: { totalActivities: 0, withoutAttempt: 0, inProgress: 0, inicial: 0, en_proceso: 0, logrado: 0, averageBestPercentage: null, medianBestPercentage: null },
+    activities: [],
+  }) }));
   return { requests };
 }
 
@@ -184,8 +192,11 @@ test("representa sin intento, sólo borrador, inicial, en proceso y logrado", as
   await expect(cellOf(page, "Alumno Alfa", column.state)).toContainText("Logrado");
   await expect(cellOf(page, "Alumno Alfa", column.best)).toContainText("90%");
 
-  // La tabla no expone navegación de estudiante hacia C3/C4.
-  await expect(page.getByRole("button", { name: /Alumno/ })).toHaveCount(0);
+  // El nombre del estudiante abre su detalle (C3); el detalle de intentos (C4)
+  // todavía no existe.
+  await page.getByRole("button", { name: "Ver detalle de Alumno Alfa" }).click();
+  await expect(page).toHaveURL(/\/docente\/grupos\/7\/estudiantes\/3\/resultados$/);
+  await expect(page.getByRole("heading", { name: "Alumno Alfa" })).toBeVisible();
 });
 
 test("muestra el borrador como insignia separada sin reemplazar el juicio del mejor intento", async ({ page }) => {
