@@ -323,6 +323,39 @@ h1 span { color: #978cda; }
 .activation-candidate small { color: #9997a5; font-size: 11px; }
 .reissue-confirmation { border-top: 1px solid #34353f; margin-top: 20px; padding-top: 8px; }
 
+/* Matriz de resultados (C1) */
+.results-matrix { margin-top: 30px; overflow-x: auto; border: 1px solid #34353f; border-radius: 10px; }
+.results-matrix:focus-visible { outline: 2px solid #aaa1ef; outline-offset: 3px; }
+.results-table { border-collapse: collapse; width: 100%; min-width: 640px; }
+.results-table th, .results-table td { border-bottom: 1px solid #30313a; border-right: 1px solid #2b2c35; padding: 10px 12px; text-align: left; vertical-align: top; }
+.results-table thead th { background: #20212b; position: sticky; top: 0; z-index: 1; }
+.results-table-corner { color: #8f8e9a; font-size: 10px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; min-width: 180px; }
+.results-table-activity { min-width: 140px; }
+.results-activity-title { color: #e7e5ee; display: block; font-size: 13px; font-weight: 700; }
+.results-activity-status { color: #a9a8b4; display: block; font-size: 10px; font-weight: 700; letter-spacing: .06em; margin-top: 4px; text-transform: uppercase; }
+.results-activity-status.is-available { color: #a6d8c7; }
+.results-activity-status.is-not_open { color: #d3ae75; }
+.results-activity-status.is-closed { color: #d59aa9; }
+.results-table-student { background: #1b1c23; min-width: 180px; }
+.results-student-name { color: #eceaf3; display: block; font-size: 13px; font-weight: 700; }
+.results-student-username { color: #8f8e9a; display: block; font-size: 11px; margin-top: 3px; }
+.results-table-cell { min-width: 140px; }
+.result-cell { background: #17181e; border-left: 3px solid #4a4b57; border-radius: 7px; display: grid; gap: 4px; padding: 9px 10px; }
+.result-cell-state { color: #d7d5df; font-size: 12px; font-weight: 750; }
+.result-cell-value { color: #f1eff7; font-size: 17px; font-weight: 800; }
+.result-cell-attempts { color: #8f8e9a; font-size: 11px; }
+.result-cell-draft { align-self: start; background: #2c2a3e; border: 1px solid #514c70; border-radius: 99px; color: #c0b8f4; font-size: 10px; font-weight: 750; padding: 2px 7px; }
+.result-cell-inicial { background: rgba(151, 67, 86, .14); border-left-color: #976775; }
+.result-cell-inicial .result-cell-state { color: #efbcc7; }
+.result-cell-en_proceso { background: rgba(156, 111, 47, .14); border-left-color: #9c6f2f; }
+.result-cell-en_proceso .result-cell-state { color: #e2c390; }
+.result-cell-logrado { background: rgba(62, 118, 95, .16); border-left-color: #477963; }
+.result-cell-logrado .result-cell-state { color: #a6d8c7; }
+.result-cell-draft-only { background: rgba(120, 110, 178, .14); border-left-color: #6f68a3; }
+.result-cell-draft-only .result-cell-state { color: #c0b8f4; }
+.result-cell-empty { background: #15161c; border-left-color: #3a3b45; }
+.result-cell-empty .result-cell-state { color: #8f8e9a; }
+
 /* Modo claro */
 .theme-light { background: #f7f7fa; color: #24242d; }
 .theme-light .sidebar { background: #efeff4; border-color: #dddde5; }
@@ -397,6 +430,13 @@ h1 span { color: #978cda; }
 .theme-light .import-table th, .theme-light .import-table td, .theme-light .import-table-wrap { border-color: #dedce5; }
 .theme-light .target-group { background: #f0edfb; border-color: #c9c3e3; }
 .theme-light .confirmation-check { color: #4e4a56; }
+.theme-light .results-matrix { border-color: #dedce5; }
+.theme-light .results-table th, .theme-light .results-table td { border-color: #e3e2ea; }
+.theme-light .results-table thead th { background: #f0eef6; }
+.theme-light .results-table-student { background: #f6f5fa; }
+.theme-light .results-student-name, .theme-light .results-activity-title, .theme-light .result-cell-value { color: #302d3e; }
+.theme-light .result-cell { background: #fff; }
+.theme-light .result-cell-empty { background: #fafafc; }
 
 @media (max-width: 1100px) { .learning-plan.is-four { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 900px) { .module-grid, .learning-plan, .learning-plan.is-four, .login-view, .teacher-actions { grid-template-columns: 1fr; } .unit-figures { max-width: 650px; } .import-summary, .import-summary.source-summary { grid-template-columns: repeat(2, 1fr); } }
