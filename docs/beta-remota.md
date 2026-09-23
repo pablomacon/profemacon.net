@@ -1,6 +1,6 @@
 # Beta remota ficticia (A1)
 
-Estado: **B1 completado**, **B2.1 completado** (D1 remota ficticia creada y registrada en `env.beta`) y **B2.2 bloqueado**: Cloudflare no lista ni acepta secrets antes del primer deploy del Worker `profemacon-net-2-beta`, así que el secreto se cargará después de ese deploy. Sin migraciones aplicadas, sin seed, sin Worker desplegado y sin datos reales.
+Estado: **B1 completado**, **B2.1 completado** (D1 remota ficticia creada), **B2.3a completado** (migraciones `0001`–`0010` aplicadas y verificadas en remoto) y **B2.2 bloqueado** hasta el primer deploy del Worker `profemacon-net-2-beta`. Sin seed, sin Worker desplegado, sin secretos y sin datos reales.
 Última actualización: 23 de septiembre de 2026.
 
 ## A. Propósito
@@ -141,9 +141,9 @@ El `database_id` es un identificador de recurso, no un secreto: se registra aqu�
 
 Estado de esa base al 2026-09-23, verificado con lecturas **read-only** (`wrangler d1 info`, `wrangler d1 list --json`):
 
-- `version: production`, 1 tabla: **`d1_migrations`, vacía** (ver corrección más abajo), `jurisdiction: null`, 24.6 kB;
-- 1 consulta de lectura y 1 de escritura en 24 h (3 filas leídas, 5 escritas);
-- las 10 migraciones (`0001`–`0010`) siguen **pendientes**: ninguna se aplicó;
+- `version: production`, `jurisdiction: null`;
+- 1 consulta de lectura y 1 de escritura en 24 h al momento de B2.1 (3 filas leídas, 5 escritas: la creación de `d1_migrations`, ver corrección más abajo);
+- en B2.1 las 10 migraciones (`0001`–`0010`) figuraban como pendientes; **desde B2.3a están aplicadas** (§ «Verificación de B2.3a»);
 - es la **única** D1 de la cuenta y el **único** recurso remoto real de A1.
 
 **Corrección del 2026-09-23 (bloque B2.2).** En B2.1 se registró esta base como “vacía” tras ejecutar `wrangler d1 migrations list … --remote --env beta`, presentándolo como lectura estricta. **No lo era**: en Wrangler 4.112 el *handler* de `d1 migrations list` llama a `initMigrationsTable(...)`, que ejecuta `CREATE TABLE IF NOT EXISTS d1_migrations`. Es decir, ese comando **creó la tabla vacía `d1_migrations`** (una escritura: 1 consulta de escritura, 5 filas escritas de contabilidad interna, y el tamaño pasó de 12.3 kB a 24.6 kB). No se aplicó ninguna migración —la tabla quedó sin filas— ni ningún seed, y no existe ninguna otra tabla. Para inspeccionar el esquema remoto sin escribir, el comando correcto es un `SELECT` de `sqlite_master` (`wrangler d1 execute … --command`), nunca `migrations list`.
@@ -188,11 +188,28 @@ Lo que **no** se hizo en B2.1: ningún seed, ningún secreto configurado, ningú
 
 **Consecuencia de orden:** el secret se carga **después del primer deploy** del Worker beta y antes del recorrido de humo. Mientras no exista, los endpoints de importación responderían `503` si el Worker estuviera desplegado sin secreto.
 
+### Verificación de B2.3a (2026-09-23) — migraciones remotas aplicadas
+
+| Paso | Resultado |
+|---|---|
+| Esquema previo (`SELECT` a `sqlite_master`) | sólo `_cf_KV` (interna de D1) y `d1_migrations` vacía |
+| `d1_migrations` previo | 0 filas |
+| Bookmark previo (`time-travel info`, sólo lectura) | `00000003-00000000-000050ef-bd6269ac8ed965ba9bb7ddf408773289` |
+| `wrangler d1 migrations apply profemacon-beta-remote --remote --env beta` | ejecutado **una sola vez** tras autorización humana; las 10 migraciones en estado ✅, sin errores |
+| `d1_migrations` después | **10 filas**, 10 nombres distintos, todas con `applied_at`, orden `0001`→`0010` |
+| Inventario remoto | **28 tablas** (26 de dominio + `d1_migrations` + `_cf_KV` interna), **24 índices**, **33 triggers** |
+| Paridad con el baseline local | nombres de tablas, índices y triggers **idénticos**; la única diferencia es la tabla interna (`_cf_KV` remota vs `_cf_METADATA` local) |
+| `PRAGMA foreign_key_check` · `PRAGMA foreign_keys` | 0 violaciones · `1` (claves foráneas aplicadas) |
+| Datos de dominio | usuarios 0 · grupos 0 · asignaturas 0 · actividades 0 · sesiones 0 · documentos 0 · intentos 0 · auditoría 0 · contenidos 0 |
+| Seed · deploy · secrets | **no** · **no** · **no** |
+
+Wrangler imprimió su pregunta de confirmación y la respondió con su valor por defecto porque el proceso no es interactivo (`🤖 Using fallback value in non-interactive context: yes`): la autorización humana efectiva de este paso fue la del responsable, otorgada antes de ejecutar el comando. El bookmark previo queda registrado por si alguna vez hace falta restaurar este estado.
+
 ## Pendientes de A1
 
-1. **B2.3 — esquema y datos ficticios**: inventario de esquema read-only (`SELECT` de `sqlite_master`, no `migrations list`), bookmark previo, `migrations apply` de `0001`–`0010` y seed exclusivamente con `seed/001-datos-ficticios.sql`. No requiere el secreto.
+1. **B2.3b — seed ficticio**: cargar únicamente `seed/001-datos-ficticios.sql` mediante el endpoint de importación de D1 (transaccional, sin `BEGIN TRANSACTION`). Bloque independiente.
 2. **B2.4 — primer deploy del Worker beta**, tras `npm run beta:build`. Crea el contenedor del Worker y habilita los secrets.
-3. **B2.2 — `DOCUMENT_HMAC_KEY` de beta**: generarla y custodiarla fuera del agente y cargarla con `wrangler secret put DOCUMENT_HMAC_KEY --env beta` **después** de ese deploy y antes del recorrido de humo.
+3. **B2.2 — `DOCUMENT_HMAC_KEY` de beta**: generar y custodiar la clave fuera del agente y cargarla con `wrangler secret put DOCUMENT_HMAC_KEY --env beta` **después** de ese deploy y antes del recorrido de humo.
 4. **B2.5 — recorrido de humo**: `npm run beta:smoke -- https://<host-beta>`.
 5. Export y bookmark del estado verificado; registro del resultado en `docs/estado-actual-interno.md`.
 6. Cierre: decidir si la beta se destruye al terminar A1.
