@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 190" width="620" height="190" role="img" aria-label="Arreglo de tres elementos y sus índices">
+  <rect x="0" y="0" width="620" height="190" fill="#ffffff"/>
+  <g font-family="Helvetica, Arial, sans-serif">
+    <text x="34" y="98" fill="#302c42" font-size="26" font-weight="600">notas</text>
+    <g fill="#eeeafb" stroke="#766cad" stroke-width="2">
+      <rect x="140" y="44" width="110" height="72" rx="10"/>
+      <rect x="266" y="44" width="110" height="72" rx="10"/>
+      <rect x="392" y="44" width="110" height="72" rx="10"/>
+    </g>
+    <g fill="#302c42" font-size="34" font-weight="600" text-anchor="middle">
+      <text x="195" y="92">7</text>
+      <text x="321" y="92">8</text>
+      <text x="447" y="92">9</text>
+    </g>
+    <g fill="#302c42" font-size="20" text-anchor="middle">
+      <text x="195" y="152">0</text>
+      <text x="321" y="152">1</text>
+      <text x="447" y="152">2</text>
+    </g>
+    <g fill="#766cad" font-size="14" text-anchor="middle">
+      <text x="195" y="176">índice</text>
+      <text x="321" y="176">índice</text>
+      <text x="447" y="176">índice</text>
+    </g>
+  </g>
+</svg>

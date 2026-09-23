@@ -141,8 +141,28 @@ test("no inventa una ruta para un curso desconocido", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Programación (demo)" })).toBeVisible();
   await expect(page.getByText("Contenido todavía no disponible")).toBeVisible();
   await expect(page.getByRole("button", { name: "Abrir curso" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Ver materiales" })).toHaveCount(0);
   await expect(page).toHaveURL(/\/mis-cursos$/);
 });
+
+test("ofrece el índice de materiales y respeta la entrada legacy del curso", async ({ page }) => {
+  await mockSession(page);
+  await mockCourses(page, [programmingCourse]);
+
+  await page.goto("/mis-cursos");
+  await expect(page.getByRole("button", { name: "Abrir curso" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Ver materiales" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Ver materiales" }).click();
+  await expect(page).toHaveURL(/\/curso\/programacion-i$/);
+  await expect(page.getByRole("heading", { name: "Materiales del curso", level: 1 })).toBeVisible();
+
+  await page.goto("/mis-cursos");
+  await page.getByRole("button", { name: "Abrir curso" }).click();
+  await expect(page).toHaveURL(/\/curso\/programacion-i\/unidad-0$/);
+  await expect(page.getByRole("heading", { name: "Introducción a la programación", exact: true })).toBeVisible();
+});
+
 
 test("no trata propiedades heredadas como contenido registrado", async ({ page }) => {
   await mockSession(page);

@@ -123,6 +123,7 @@ export function MyCourses({ session, onLogin, onOpenCourse, onRetrySession, onSe
       {catalog.courses.map((course) => {
         const content = getCourseContent(course.subjectCode);
         const key = [course.subjectCode, course.year, course.groupCode, course.access].join(":");
+        const materialsPath = content?.materialEntryPath ?? null;
         return <article className="course-card" key={key}>
           <div className="course-card-main">
             <div className="course-card-labels">
@@ -137,7 +138,10 @@ export function MyCourses({ session, onLogin, onOpenCourse, onRetrySession, onSe
             </dl>
             {!content && <p className="course-unavailable">Contenido todavía no disponible</p>}
           </div>
-          {content && <button className="button-primary" onClick={() => onOpenCourse(content.entryPath)}>{content.actionLabel}</button>}
+          {content && <div className="course-card-actions">
+            <button className="button-primary" onClick={() => onOpenCourse(content.entryPath)}>{content.actionLabel}</button>
+            {materialsPath !== null && <button className="button-secondary" onClick={() => onOpenCourse(materialsPath)}>Ver materiales</button>}
+          </div>}
         </article>;
       })}
     </div>}

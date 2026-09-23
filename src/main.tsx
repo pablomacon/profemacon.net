@@ -15,9 +15,11 @@ import { Login } from "./login";
 import { ActivationManagement } from "./activation-management";
 import { StudentImportWizard } from "./student-import-wizard";
 import { MyCourses } from "./my-courses";
+import { MaterialCoursePage, MaterialPage, MaterialUnitPage } from "./courses/material-consumption/material-pages";
+import { parseCourseRoute } from "./courses/material-consumption/material-routing";
 import "./styles.css";
 
-type Route = "/" | "/ingresar" | "/mis-cursos" | "/historial" | "/docente" | "/docente/importar-estudiantes" | "/docente/activaciones" | "/docente/actividades/variables-java-01/prueba" | `/docente/grupos/${number}` | `/docente/grupos/${number}/actividades` | `/docente/grupos/${number}/resultados` | `/docente/grupos/${number}/actividades/${string}/prueba` | `/docente/grupos/${number}/actividades/${number}/resultados` | `/docente/grupos/${number}/estudiantes/${number}/resultados` | `/docente/grupos/${number}/estudiantes/${number}/actividades/${number}/intentos` | "/practicante" | "/curso/programacion-i/unidad-0" | "/curso/programacion-i/unidad-0/actividad" | "/curso/programacion-i/unidad-1" | "/curso/programacion-i/unidad-1/actividad/variables-java-01";
+type Route = "/" | "/ingresar" | "/mis-cursos" | "/historial" | "/docente" | "/docente/importar-estudiantes" | "/docente/activaciones" | "/docente/actividades/variables-java-01/prueba" | `/docente/grupos/${number}` | `/docente/grupos/${number}/actividades` | `/docente/grupos/${number}/resultados` | `/docente/grupos/${number}/actividades/${string}/prueba` | `/docente/grupos/${number}/actividades/${number}/resultados` | `/docente/grupos/${number}/estudiantes/${number}/resultados` | `/docente/grupos/${number}/estudiantes/${number}/actividades/${number}/intentos` | "/practicante" | "/curso/programacion-i/unidad-0" | "/curso/programacion-i/unidad-0/actividad" | "/curso/programacion-i/unidad-1" | "/curso/programacion-i/unidad-1/actividad/variables-java-01" | `/curso/${string}`;
 type Theme = "dark" | "light";
 type SessionUser = { id: number; username: string; displayName: string; email: string | null; roles: string[] };
 type SessionState =
@@ -40,6 +42,14 @@ const navigate = (path: Route) => {
   window.history.pushState({}, "", path);
   window.dispatchEvent(new PopStateEvent("popstate"));
 };
+
+/**
+ * Rutas de curso del consumo automático (6D-B): `/curso/<asignatura>`,
+ * `/curso/<asignatura>/<unidad>` y `/curso/<asignatura>/<unidad>/<material>`.
+ * Sólo se aceptan formas exactas validadas por el contrato; una ruta legacy con
+ * más segmentos (por ejemplo la actividad de Unidad 1) nunca entra por acá.
+ */
+const isCourseContentPath = (path: string): boolean => parseCourseRoute(path) !== null;
 
 function Layout({ route, theme, user, onThemeChange, onLogout, children }: { route: Route; theme: Theme; user: SessionUser | null; onThemeChange: () => void; onLogout: () => Promise<void>; children: ReactNode }) {
   return (
@@ -146,12 +156,14 @@ function TeacherPanel({ user }: { user: SessionUser | null }) {
 
 function App() {
   const isDynamicTeacherRoute = (path: string) => /^\/docente\/grupos\/\d+(?:\/(?:actividades(?:\/\d+\/resultados|\/[^/]+\/prueba)?|estudiantes\/\d+\/(?:actividades\/\d+\/intentos|resultados)|resultados))?$/.test(path);
-  const [route, setRoute] = useState<Route>(() => (supportedRoutes.includes(window.location.pathname as Route) || isDynamicTeacherRoute(window.location.pathname)) ? window.location.pathname as Route : "/");
+  // Predicado único de aceptación de rutas: legacy exactas, docente y curso v1.
+  const isSupportedPath = (path: string) => supportedRoutes.includes(path as Route) || isDynamicTeacherRoute(path) || isCourseContentPath(path);
+  const [route, setRoute] = useState<Route>(() => (isSupportedPath(window.location.pathname)) ? window.location.pathname as Route : "/");
   const [theme, setTheme] = useState<Theme>(() => localStorage.getItem("profemacon-theme") === "light" ? "light" : "dark");
   const [session, setSession] = useState<SessionState>({ status: "checking" });
   const sessionRequestId = useRef(0);
   const user = session.status === "authenticated" ? session.user : null;
-  useEffect(() => { const listener = () => setRoute((supportedRoutes.includes(window.location.pathname as Route) || isDynamicTeacherRoute(window.location.pathname)) ? window.location.pathname as Route : "/"); window.addEventListener("popstate", listener); return () => window.removeEventListener("popstate", listener); }, []);
+  useEffect(() => { const listener = () => setRoute((isSupportedPath(window.location.pathname)) ? window.location.pathname as Route : "/"); window.addEventListener("popstate", listener); return () => window.removeEventListener("popstate", listener); }, []);
   useEffect(() => { localStorage.setItem("profemacon-theme", theme); }, [theme]);
 
   const checkSession = useCallback(async (navigateOnSuccess = false, signal?: AbortSignal): Promise<boolean> => {
@@ -205,6 +217,7 @@ function App() {
     return () => controller.abort();
   }, [checkSession]);
 
+  const courseRoute = parseCourseRoute(route);
   const view = route === "/" ? <Home />
     : route === "/ingresar" ? user ? <section className="placeholder-view"><p className="eyebrow">Sesión activa</p><h1>{user.displayName}</h1><div className="placeholder-card"><div className="placeholder-mark">PM</div><div><h2>Ya ingresaste</h2><p>Podés continuar a tus cursos o cerrar la sesión desde la barra superior.</p><button className="button-primary" onClick={() => navigate("/mis-cursos")}>Ir a mis cursos</button></div></div></section> : <Login onAuthenticated={refreshSession} />
     : route === "/mis-cursos" ? <MyCourses
@@ -218,6 +231,14 @@ function App() {
     : route === "/curso/programacion-i/unidad-0/actividad" ? <Unit0Activity onBack={() => navigate("/curso/programacion-i/unidad-0")} />
     : route === "/curso/programacion-i/unidad-1" ? <Unit1 onBack={() => navigate("/mis-cursos")} onOpenActivity={() => navigate("/curso/programacion-i/unidad-1/actividad/variables-java-01")} theme={theme} />
     : route === "/curso/programacion-i/unidad-1/actividad/variables-java-01" ? <VariablesJavaActivity1 onBack={() => navigate("/curso/programacion-i/unidad-1")} onLogin={() => navigate("/ingresar")} />
+    /**
+     * Consumo automático de materiales v1 (6D-B). Se evalúa DESPUÉS de todas las
+     * rutas legacy de curso: Unidad 0 y Unidad 1 conservan prioridad absoluta y
+     * no dependen del registry. Dentro del bloque, de más específica a menos.
+     */
+    : courseRoute?.kind === "material" ? <MaterialPage subjectCode={courseRoute.subjectCode} unitCode={courseRoute.unitCode} slug={courseRoute.slug} theme={theme} onNavigate={(path) => navigate(path as Route)} />
+    : courseRoute?.kind === "unit" ? <MaterialUnitPage subjectCode={courseRoute.subjectCode} unitCode={courseRoute.unitCode} onNavigate={(path) => navigate(path as Route)} />
+    : courseRoute?.kind === "course" ? <MaterialCoursePage subjectCode={courseRoute.subjectCode} onNavigate={(path) => navigate(path as Route)} />
     : route === "/historial" ? <Placeholder section="Archivo" title="Historial" detail="Los cursos archivados, resultados y materiales de solo lectura aparecerán en esta vista." />
     : route === "/docente" ? <TeacherGroupsPage open={(id) => navigate(`/docente/grupos/${id}`)} />
     : /^\/docente\/grupos\/\d+\/actividades\/[^/]+\/prueba$/.test(route) ? (() => { const [, id, slug] = /^\/docente\/grupos\/(\d+)\/actividades\/([^/]+)\/prueba$/.exec(route)!; return <TeacherActivityPreview slug={slug} onBack={() => navigate(`/docente/grupos/${id}/actividades` as Route)} onLogin={() => navigate("/ingresar")} initialGroupCode={sessionStorage.getItem(`teacher-preview-group-${id}-${slug}`) ?? undefined} />; })()

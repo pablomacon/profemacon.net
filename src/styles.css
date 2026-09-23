@@ -538,3 +538,37 @@ h1 span { color: #978cda; }
 @media (max-width: 430px) { h1 { font-size: 2.25rem; } .intro-actions, .activity-actions { align-items: stretch; flex-direction: column; } .intro-actions button, .activity-actions button { width: 100%; } .unit-meta { gap: 6px; } }
 @media (max-width: 780px) { .unit-activity-card { align-items: flex-start; flex-direction: column; gap: 18px; } .activity-access-panel dl { grid-template-columns: 1fr; } }
 @media (max-width: 620px) { .import-steps { grid-template-columns: repeat(2, 1fr); } .import-summary, .import-summary.source-summary, .credential-card dl { grid-template-columns: 1fr; } .import-panel-heading, .finish-delivery { align-items: stretch; flex-direction: column; } .status-pill { align-self: flex-start; } .credential-actions { flex-direction: column; } .credential-actions button { width: 100%; } }
+
+/* Consumo automático de materiales (Hito 6D-B) */
+.course-card-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
+.material-list { display: grid; gap: 12px; list-style: none; margin: 26px 0 0; padding: 0; }
+.material-list > li { margin: 0; }
+.material-card { align-items: center; background: #1a1b22; border: 1px solid #353641; border-radius: 10px; display: flex; gap: 24px; justify-content: space-between; padding: 21px 22px; }
+.material-card.is-unit { border-left: 4px solid #aaa1ef; }
+.material-card-main { min-width: 0; }
+.material-card-label { color: #aaa1ef; font-size: 11px; font-weight: 750; letter-spacing: .11em; text-transform: uppercase; }
+.material-card h2 { color: #efedf6; font-family: "Josefin Sans", sans-serif; font-size: 1.35rem; margin: 8px 0 8px; }
+.material-card p { color: #c0bdc9; font-size: 14px; line-height: 1.55; margin: 0 0 10px; max-width: 560px; }
+.material-card .button-primary, .material-card .button-secondary { flex: 0 0 auto; }
+.material-meta { margin-bottom: 12px; }
+.material-nav { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; margin: 48px 0 0; max-width: 800px; }
+.material-nav .button-secondary { max-width: 48%; text-align: left; }
+.material-state { background: #1c1d25; border: 1px dashed #57526f; border-radius: 10px; margin: 12px 0 0; max-width: 760px; padding: 26px 28px; }
+.material-state h1 { font-size: clamp(1.7rem, 2.4vw, 2.2rem); margin: 6px 0 10px; }
+.material-state p:not(.eyebrow) { color: #c3c0cc; font-size: 14px; line-height: 1.6; margin: 0; max-width: 620px; }
+.material-state .button-primary { margin-top: 20px; }
+.material-figure { display: block; margin: 28px 0; }
+.material-figure img { border: 1px solid #343540; border-radius: 8px; display: block; height: auto; max-width: 100%; }
+.material-figure-caption { color: #a5a2b3; display: block; font-size: 12px; margin-top: 8px; }
+.markdown-content img { height: auto; max-width: 100%; }
+.material-image-note, .material-block-note { border-left: 3px solid #6f6a8b; color: #b7b3c8; display: block; font-size: 14px; line-height: 1.55; margin: 22px 0; padding: 8px 0 8px 12px; }
+
+.theme-light .material-card { background: #fff; border-color: #dedde6; }
+.theme-light .material-card h2 { color: #302d3e; }
+.theme-light .material-card p { color: #625e70; }
+.theme-light .material-card-label { color: #5c5490; }
+.theme-light .material-state { background: #fbfaff; border-color: #bdb5d9; }
+.theme-light .material-state p:not(.eyebrow) { color: #5e5b6b; }
+.theme-light .material-figure img { border-color: #d7d2e7; }
+.theme-light .material-figure-caption { color: #6f6c7c; }
+.theme-light .material-image-note, .theme-light .material-block-note { border-color: #a9a1ce; color: #5e5b6b; }
