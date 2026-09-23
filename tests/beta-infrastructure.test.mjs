@@ -79,20 +79,33 @@ function runGuard(configPath, ...args) {
   return { status: result.status, output: `${result.stdout ?? ""}${result.stderr ?? ""}` };
 }
 
-test("la guarda acepta la configuración beta preparada en B1", () => {
+test("la guarda acepta la configuración beta del repositorio en modo --dry", () => {
+  const target = readBetaTarget(realConfigPath);
+  const state = describeDatabaseId(target.beta.d1.database_id);
   const result = runGuard(realConfigPath, "--dry");
   assert.equal(result.status, 0, result.output);
   assert.match(result.output, /Worker objetivo:\s+profemacon-net-2-beta/);
   assert.match(result.output, /D1 database_name:\s+profemacon-beta-remote/);
-  assert.match(result.output, /D1 database_id:\s+PLACEHOLDER/);
+  assert.match(result.output, new RegExp(`D1 database_id:\\s+${state.label}`));
+  assert.match(result.output, /D1 local \(control\): profemacon-beta-local/);
   assert.match(result.output, /NO SE EJECUTÓ NINGUNA OPERACIÓN REMOTA/);
 });
 
 test("la guarda exige un database_id real antes de operar en remoto", () => {
+  // La configuración evoluciona: en B1 el marcador de ceros es válido y en B2.1
+  // ya hay UUID real. La guarda debe aceptar las dos etapas sin ambigüedad.
+  const target = readBetaTarget(realConfigPath);
+  const state = describeDatabaseId(target.beta.d1.database_id);
   const result = runGuard(realConfigPath, "--require-real");
-  assert.equal(result.status, 1, result.output);
-  assert.match(result.output, /todavía es el marcador de ceros/);
-  assert.match(result.output, /Este control no ejecuta operaciones remotas/);
+  if (state.kind === "placeholder") {
+    assert.equal(result.status, 1, result.output);
+    assert.match(result.output, /todavía es el marcador de ceros/);
+  } else {
+    assert.equal(state.kind, "real", result.output);
+    assert.equal(result.status, 0, result.output);
+    assert.match(result.output, /destino beta coherente y con database_id real/);
+  }
+  assert.match(result.output, /no ejecuta operaciones remotas/);
 });
 
 test("la guarda rechaza un Worker beta con otro nombre", () => {
@@ -308,11 +321,13 @@ test("las utilidades locales distinguen comentarios, comas finales y database_id
 
 test("readBetaTarget y validateBetaTarget describen la configuración real del repositorio", () => {
   const target = readBetaTarget(realConfigPath);
+  const state = describeDatabaseId(target.beta.d1.database_id);
   assert.deepEqual(target.environmentNames, ["beta"]);
   assert.equal(target.beta.name, BETA_WORKER_NAME);
   assert.equal(target.beta.d1.database_name, BETA_DATABASE_NAME);
   assert.equal(validateBetaTarget(target, { allowPlaceholder: true }).ok, true);
-  assert.equal(validateBetaTarget(target, { allowPlaceholder: false }).ok, false);
+  // En modo estricto la config real sólo es válida cuando la provisión ya ocurrió.
+  assert.equal(validateBetaTarget(target, { allowPlaceholder: false }).ok, state.kind === "real");
 });
 
 

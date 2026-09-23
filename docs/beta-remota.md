@@ -1,6 +1,6 @@
 # Beta remota ficticia (A1)
 
-Estado: **B1 completado** (preparación local). El bloque **B2 — provisionamiento remoto** todavía no se ejecutó.
+Estado: **B1 completado** (preparación local) y **B2.1 completado** (D1 remota ficticia creada y registrada en `env.beta`). **B2.2 — secreto, migraciones y datos ficticios — todavía no se ejecutó.**
 Última actualización: 23 de septiembre de 2026.
 
 ## A. Propósito
@@ -129,6 +129,24 @@ Cada comando remoto se ejecuta de a uno, con la guarda en modo estricto por dela
 - sin `--remote` en comandos de D1 sin la guarda `--require-real` por delante;
 - sin escritura remota durante B1.
 
+## N. Recursos remotos creados (B2.1)
+
+| Fecha | Recurso | Identificador | Cómo se creó |
+|---|---|---|---|
+| 2026-09-23 | D1 `profemacon-beta-remote` | `42c1bbd1-c6e9-432a-a3b5-86eac4e9dd5e` | `wrangler d1 create profemacon-beta-remote` **sin `--location`**: Cloudflare eligió la región `ENAM` |
+
+El `database_id` es un identificador de recurso, no un secreto: se registra aquí y vive en `wrangler.jsonc` → `env.beta.d1_databases[0].database_id`, que es lo que hace que el binding `DB` de la beta resuelva. El entorno local (top-level) conserva `profemacon-beta-local` con el marcador de ceros.
+
+Estado de esa base al 2026-09-23, verificado con lecturas **read-only** (`wrangler d1 info`, `wrangler d1 list --json` y `wrangler d1 migrations list … --remote --env beta`):
+
+- `version: production`, `num_tables: 0` → **esquema vacío**, sin tablas;
+- `jurisdiction: null`, 12.3 kB, `read_replication.mode: disabled`;
+- 0 consultas de lectura y 0 de escritura en 24 h;
+- las 10 migraciones (`0001`–`0010`) figuran como **pendientes**;
+- es la **única** D1 de la cuenta y el **único** recurso remoto de A1.
+
+Lo que **no** se hizo en B2.1: ninguna migración aplicada, ningún seed, ningún secreto configurado, ningún Worker desplegado, ninguna escritura de datos, `--location` no fijado, ningún otro recurso creado ni borrado.
+
 ## Estado de verificación de B1
 
 | Verificación | Resultado |
@@ -141,11 +159,26 @@ Cada comando remoto se ejecuta de a uno, con la guarda en modo estricto por dela
 | `npm run beta:build` | correcto; config aplanado `profemacon-net-2-beta` → `profemacon-beta-remote` (PLACEHOLDER) |
 | Recursos remotos | **ninguno** creado, modificado ni consultado |
 
+### Verificación de B2.1 (2026-09-23)
+
+| Verificación | Resultado |
+|---|---|
+| `git status --porcelain -uall` antes de empezar | vacío; `HEAD` = `origin/main` = `b22df78` |
+| `wrangler d1 list --json` antes de crear | `[]` (la base no existía; sin duplicados) |
+| `wrangler d1 create profemacon-beta-remote` | ✅ creada en `ENAM`, sin `--location` ni `--update-config` |
+| `node scripts/verify-beta-d1-target.mjs --dry` | 0 · `D1 database_id: REAL (42c1bbd1-…)`; el control local sigue en PLACEHOLDER |
+| `node scripts/verify-beta-d1-target.mjs --require-real` | 0 · destino beta coherente con UUID real |
+| `npm run beta:build` | 0 · aplanado `profemacon-net-2-beta`, `targetEnvironment: beta`, `DB` → `profemacon-beta-remote` (REAL) |
+| `wrangler d1 info` / `d1 list --json` / `migrations list --remote` | base existente, `num_tables: 0`, 10 migraciones pendientes, 0 lecturas y 0 escrituras |
+| Migraciones · seed · secretos · deploy | **no**, **no**, **no**, **no** |
+
 ## Pendientes de A1
 
-1. **B2 — provisionamiento remoto ficticio**: crear la D1, cargar el secreto, aplicar migraciones, sembrar, desplegar y recorrer el smoke test, todo con confirmaciones humanas.
-2. Export y bookmark del estado verificado; registro del resultado en `docs/estado-actual-interno.md`.
-3. Cierre: decidir si la beta se destruye al terminar A1.
-4. Todo lo de A2 (rate limiting, restablecimiento de contraseña, revocación global de sesiones, limpieza de sesiones y activaciones, auditoría consultable, privacidad, pruebas negativas de authz y revisión de errores) sigue bloqueando el uso con datos reales.
+1. **B2.2 — secreto**: generar y cargar `DOCUMENT_HMAC_KEY` de la beta (nueva, distinta de la local y de la futura real), sin registrar su valor.
+2. **B2.3 — esquema y datos ficticios**: bookmark previo, inventario de esquema, `migrations apply` de `0001`–`0010` y seed exclusivamente con `seed/001-datos-ficticios.sql`.
+3. **B2.4 — deploy beta y recorrido de humo**: `wrangler deploy` tras `npm run beta:build` y `npm run beta:smoke -- https://<host-beta>`.
+4. Export y bookmark del estado verificado; registro del resultado en `docs/estado-actual-interno.md`.
+5. Cierre: decidir si la beta se destruye al terminar A1.
+6. Todo lo de A2 (rate limiting, restablecimiento de contraseña, revocación global de sesiones, limpieza de sesiones y activaciones, auditoría consultable, privacidad, pruebas negativas de authz y revisión de errores) sigue bloqueando el uso con datos reales.
 
 

@@ -31,7 +31,7 @@
         {
           "binding": "DB",
           "database_name": "profemacon-beta-remote",
-          "database_id": "00000000-0000-0000-0000-000000000000",
+          "database_id": "42c1bbd1-c6e9-432a-a3b5-86eac4e9dd5e",
           "migrations_dir": "migrations"
         }
       ]
