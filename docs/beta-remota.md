@@ -1,6 +1,6 @@
 # Beta remota ficticia (A1)
 
-Estado: **B1 completado**, **B2.1 completado** (D1 remota creada), **B2.3a completado** (migraciones `0001`–`0010` aplicadas y verificadas) y **B2.3b completado** (fixtures ficticios sembrados y verificados). **B2.2 sigue bloqueado** hasta el primer deploy del Worker `profemacon-net-2-beta`, que aún no existe. Sin secretos y sin datos reales.
+Estado: **B1 completado**, **B2.1 completado** (D1 remota creada), **B2.3a completado** (migraciones `0001`–`0010`), **B2.3b completado** (fixtures ficticios) y **B2.4 completado** (primer deploy del Worker beta, ya disponible por HTTPS). **B2.2 sigue pendiente**: `DOCUMENT_HMAC_KEY` todavía no existe y ahora el Worker ya está desplegado, así que el prerequisito quedó resuelto. Sin datos reales.
 Última actualización: 23 de septiembre de 2026.
 
 ## A. Propósito
@@ -62,7 +62,7 @@ Si el `database_id` sigue siendo el marcador de ceros, el build lo informa como 
 `DOCUMENT_HMAC_KEY` de beta debe ser **nueva y distinta** de la local y de la futura real. Este documento no contiene su valor y B1 no la generó.
 
 - Generación: 32 bytes aleatorios codificados en `base64url` (43 caracteres) o 64 hex. La implementación exige un mínimo de 32 caracteres y devuelve `503` si no está configurada.
-- **Requisito de orden (verificado el 2026-09-23):** Cloudflare no lista ni acepta secrets de un Worker inexistente. `wrangler secret list --env beta` responde `Worker "profemacon-net-2-beta" (env: beta) not found` y sugiere desplegar primero. Por eso la carga ocurre **después del primer deploy** de la beta y antes del recorrido de humo.
+- **Requisito de orden (verificado el 2026-09-23):** Cloudflare no lista ni acepta secrets de un Worker inexistente. `wrangler secret list --env beta` respondía `Worker "profemacon-net-2-beta" (env: beta) not found` y sugería desplegar primero. **Resuelto en B2.4**: con el Worker ya desplegado, ese comando responde `[]` (lista vacía) y la carga del secreto queda habilitada.
 - **Generación y custodia:** las hace el responsable **fuera del agente** —terminal propia más gestor de contraseñas con la etiqueta `Profe Macón beta — DOCUMENT_HMAC_KEY`—. El valor no se imprime en el agente ni se pega en el chat, porque quedaría persistido en el transcript de la conversación. La carga puede hacerla el responsable directamente o el agente leyendo el valor por *stdin* desde una variable de entorno de usuario; nunca desde un archivo del repositorio.
 - Carga: `wrangler secret put DOCUMENT_HMAC_KEY --env beta` (el valor se escribe por entrada estándar y nunca queda en el repositorio).
 - Verificación sin exponer el valor: `wrangler secret list --env beta` (sólo nombres).
@@ -104,7 +104,7 @@ wrangler d1 execute profemacon-beta-remote --remote --env beta --file=seed/001-d
 
 ## K. Dominio
 
-El acceso inicial usa **`workers.dev`**. No se configura dominio propio ni DNS: la validación de `Secure`, `HttpOnly`, `SameSite=Strict`, `Path=/`, login, logout y `Origin` no depende del dominio, porque la implementación deriva el `Origin` de la propia petición y activa `Secure` cuando la URL es https. El subdominio exacto se conoce al desplegar y por eso no se escribe en este documento.
+El acceso inicial usa **`workers.dev`**. No se configura dominio propio ni DNS: la validación de `Secure`, `HttpOnly`, `SameSite=Strict`, `Path=/`, login, logout y `Origin` no depende del dominio, porque la implementación deriva el `Origin` de la propia petición y activa `Secure` cuando la URL es https. Desde B2.4 la URL real existe y queda registrada **únicamente** en la sección «Verificación de B2.4» de este documento interno: **no** debe publicarse en el `README.md`, en los sistemas actuales ni en capturas.
 
 ## L. Operaciones remotas (B2 — no ejecutadas todavía)
 
@@ -238,13 +238,32 @@ Fixtures verificados con `SELECT`:
 
 No hubo deploy, ni secretos, ni seed adicional (`variables-java` queda fuera de B2.3b), ni escrituras fuera del seed versionado.
 
+### Verificación de B2.4 (2026-09-23) — primer deploy del Worker beta
+
+| Paso | Resultado |
+|---|---|
+| Estado previo del Worker | `wrangler deployments list --name profemacon-net-2-beta` → **`This Worker does not exist on your account` (code 10007)** |
+| `npm run beta:build` | exit 0 · aplanado `profemacon-net-2-beta`, `targetEnvironment: beta`, `DB` → `profemacon-beta-remote` (REAL), `ASSETS` → `../client` con fallback de página única, `workers_dev: true`; **sin** secretos, tokens ni `account_id` en el artefacto |
+| Redirección `.wrangler/deploy/config.json` | `{"configPath":"..\\..\\dist\\profemacon_net_2\\wrangler.json","auxiliaryWorkers":[]}` → apunta al artefacto beta |
+| Comando ejecutado (**una sola vez**, previa autorización humana) | `wrangler deploy --config dist/profemacon_net_2/wrangler.json` |
+| Resultado | 85 archivos leídos · **77 assets subidos** · Total Upload 119.69 KiB (gzip 21.88 KiB) · bindings `env.DB (profemacon-beta-remote)` → D1 Database y `env.ASSETS` → Assets · `Uploaded profemacon-net-2-beta` · `Deployed profemacon-net-2-beta triggers` |
+| **URL de la beta** (registro interno, no publicitar) | `https://profemacon-net-2-beta.pablomacon.workers.dev` |
+| Version ID activo | `2307ceb8-7467-4c54-baac-f5e4368c58b3` |
+| `deployments list` posterior | **1** deployment (2026-09-23T21:12:44.075Z · Source Upload · “Automatic deployment on upload.” · 100 %) |
+| `versions list` posterior | **1** version: `2307ceb8-7467-4c54-baac-f5e4368c58b3` |
+| `wrangler secret list --env beta` | **`[]`** → comando ya operativo y **sin secretos**: `DOCUMENT_HMAC_KEY` sigue ausente |
+| HTTPS y rutas públicas | `https` · `GET /` → 200 `text/html` (782 bytes, `<title>Profe Macón 2.0</title>` y `/assets/index-…`) · `GET /curso/programacion-i` → 200 `text/html` · `GET /ruta-inexistente` → 200 `text/html` (fallback SPA) · `/logo-pm.svg` → 200 `image/svg+xml` · `/materiales/programacion-i/unidad-2/arreglos-introduccion/01-indices.svg` → 200 `image/svg+xml` (1208 bytes) · `/assets/index-DvxFw3A5.js` → 200 `text/javascript` (524 kB) |
+| API sin sesión (sólo GET) | `GET /api/session` → **401** y `GET /api/me/courses` → **401**; sin `POST`, sin `activate`, sin `login`, sin importaciones |
+| D1 | **ninguna escritura**: el deploy no toca datos. `d1 info` confirma la base disponible (`num_tables: 27`, 401 kB) |
+
+No se configuró ningún secreto, no se ejecutó smoke autenticado, no se aplicaron migraciones ni seeds adicionales, no se configuró dominio propio ni Access, y no hubo reintentos ni segundo deploy.
+
 ## Pendientes de A1
 
-1. **B2.4 — primer deploy del Worker beta**, tras `npm run beta:build`. Crea el contenedor del Worker y habilita los secrets.
-2. **B2.2 — `DOCUMENT_HMAC_KEY` de beta**: generar y custodiar la clave fuera del agente y cargarla con `wrangler secret put DOCUMENT_HMAC_KEY --env beta` **después** de ese deploy y antes del recorrido de humo.
-3. **B2.5 — recorrido de humo**: `npm run beta:smoke -- https://<host-beta>`.
-4. Export y bookmark del estado verificado; registro del resultado en `docs/estado-actual-interno.md`.
-5. Cierre: decidir si la beta se destruye al terminar A1.
-6. Todo lo de A2 (rate limiting, restablecimiento de contraseña, revocación global de sesiones, limpieza de sesiones y activaciones, auditoría consultable, privacidad, pruebas negativas de authz y revisión de errores) sigue bloqueando el uso con datos reales.
+1. **B2.2 — `DOCUMENT_HMAC_KEY` de beta** (ya desbloqueado tras el deploy): generar y custodiar la clave fuera del agente y cargarla con `wrangler secret put DOCUMENT_HMAC_KEY --env beta`. Mientras falte, los endpoints de importación responden `503`.
+2. **B2.5 — recorrido de humo**: `npm run beta:smoke -- https://<host-beta>` (activación ficticia, login, cookies, sesión, cursos, rechazo de la actividad deshabilitada, logout, 401 posterior y `Origin` ajeno).
+3. Export y bookmark del estado verificado; registro del resultado en `docs/estado-actual-interno.md`.
+4. Cierre: decidir si la beta se destruye al terminar A1.
+5. Todo lo de A2 (rate limiting, restablecimiento de contraseña, revocación global de sesiones, limpieza de sesiones y activaciones, auditoría consultable, privacidad, pruebas negativas de authz y revisión de errores) sigue bloqueando el uso con datos reales.
 
 
