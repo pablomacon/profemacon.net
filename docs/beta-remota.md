@@ -1,6 +1,6 @@
 # Beta remota ficticia (A1)
 
-Estado: **B1 completado**, **B2.1 completado** (D1 remota ficticia creada), **B2.3a completado** (migraciones `0001`–`0010` aplicadas y verificadas en remoto) y **B2.2 bloqueado** hasta el primer deploy del Worker `profemacon-net-2-beta`. Sin seed, sin Worker desplegado, sin secretos y sin datos reales.
+Estado: **B1 completado**, **B2.1 completado** (D1 remota creada), **B2.3a completado** (migraciones `0001`–`0010` aplicadas y verificadas) y **B2.3b completado** (fixtures ficticios sembrados y verificados). **B2.2 sigue bloqueado** hasta el primer deploy del Worker `profemacon-net-2-beta`, que aún no existe. Sin secretos y sin datos reales.
 Última actualización: 23 de septiembre de 2026.
 
 ## A. Propósito
@@ -94,7 +94,7 @@ El seed es `seed/001-datos-ficticios.sql`: es 100 % ficticio, repetible (`INSERT
 
 Los códigos de activación demo están publicados en el `README.md` del repositorio. Se aceptan en la beta **sólo** porque A1 es efímera, usa únicamente datos ficticios y su URL no se publicita. Antes de cualquier dato real hay que eliminar o archivar esas cuentas y reconstruir la base.
 
-El seed remoto se ejecuta, en B2, con el endpoint de importación de D1 (el archivo no debe contener `BEGIN TRANSACTION` ni `COMMIT`):
+El seed remoto se aplicó en **B2.3b** mediante el endpoint de importación de D1 (el archivo no contiene `BEGIN TRANSACTION` ni `COMMIT`), y la verificación de los fixtures está en la sección correspondiente más abajo:
 
 ```powershell
 wrangler d1 execute profemacon-beta-remote --remote --env beta --file=seed/001-datos-ficticios.sql
@@ -205,14 +205,46 @@ Lo que **no** se hizo en B2.1: ningún seed, ningún secreto configurado, ningú
 
 Wrangler imprimió su pregunta de confirmación y la respondió con su valor por defecto porque el proceso no es interactivo (`🤖 Using fallback value in non-interactive context: yes`): la autorización humana efectiva de este paso fue la del responsable, otorgada antes de ejecutar el comando. El bookmark previo queda registrado por si alguna vez hace falta restaurar este estado.
 
+### Verificación de B2.3b (2026-09-23) — seed ficticio aplicado
+
+| Paso | Resultado |
+|---|---|
+| Conteos previos (SELECT) | todas las tablas de dominio en 0: usuarios, roles, grupos, asignaturas, contenidos, activaciones, sesiones, inscripciones, asignaciones, publicaciones, auditoría |
+| Inspección del seed (101 líneas, sin cambios) | sólo fixtures ficticios; `INSERT OR IGNORE` (idempotente por inspección); **sin** `BEGIN TRANSACTION`, `COMMIT`, `ROLLBACK`, `DELETE`, `DROP` ni `ALTER` |
+| Bookmark PRE-SEED | `00000004-00000000-000050ef-20e9b76105f61fe5629e9a808f3d9572` |
+| `wrangler d1 execute profemacon-beta-remote --remote --env beta --file=seed/001-datos-ficticios.sql` | ejecutado **una sola vez** tras autorización humana; exit 0 · **16 consultas** · 64 filas leídas · **54 filas escritas** · `changes: 22` · “if the execution fails to complete, your DB will return to its original state and you can safely retry” |
+| Bookmark resultante | `00000005-00000006-000050ef-f19d0681d597bb310a77f15b043ba5d1` |
+
+Fixtures verificados con `SELECT`:
+
+| Objeto | Resultado |
+|---|---|
+| `usuarios` (2) | `ana.docente` · “Ana Docente (prueba)” · `ana.docente@example.test` · rol `docente` — `estudiante.demo` · “Estudiante Demo (prueba)” · `estudiante.demo@example.test` · rol `estudiante` |
+| `roles` (4) | administrador, docente, estudiante, practicante |
+| `usuario_roles` (2) | una asociación por usuario, coherente con su rol |
+| `asignaturas` (1) | `programacion-demo` · “Programación (demo)” · activa |
+| `ediciones_anuales` (1) | 2026 · “Programación 2026 (demo)” · activa |
+| `grupos` (1) | `DEMO-A` · “Grupo de demostración A” · activo |
+| `inscripciones` (1) | `estudiante.demo` en `DEMO-A` (activa) |
+| `asignaciones_grupo` (1) | `ana.docente` en `DEMO-A` (docente, activa) |
+| `mapeos_grupo_origen` (1) | `portafolio: programacion demo / grupo demo a / 2026` → `DEMO-A` |
+| `contenidos` / `versiones_contenido` / `publicaciones_contenido` (1/1/1) | `bienvenida-demo` · unidad `inicio` · activo · v1 · `content/demo/bienvenida.md` · **publicada** para `DEMO-A` |
+| `activaciones_cuenta` (2) | `demo-activacion-docente` y `demo-activacion-estudiante`, `expira_en` 2099-12-31, sin consumir y sin revocar, `codigo_hash` de 64 caracteres (no se registra su valor) |
+| `eventos_auditoria` | **0 filas**: el seed no escribe auditoría |
+| Ausencias confirmadas | documentos 0 · sesiones 0 · intentos 0 · respuestas 0 · calificaciones 0 · importaciones 0 · preguntas 0 · habilitaciones 0 · credenciales 0 |
+| Integridad y esquema | `foreign_key_check` = **0** · `d1_migrations` = **10** filas (sin cambios) · 26 tablas de dominio + `d1_migrations` + `_cf_KV` (28 en total) · 24 índices · 33 triggers → **el seed no alteró el esquema** |
+
+**Sobre los códigos demo:** `PM-DEMO-ESTUDIANTE-2026` y `PM-DEMO-DOCENTE-2026` están publicados en el `README.md` del repositorio y quedan activos hasta 2099. Se aceptan **exclusivamente** porque esta beta A1 contiene sólo datos ficticios, es efímera y su URL no se publicita; **no** es apta para datos reales y esas cuentas deberán eliminarse o archivarse antes de cualquier dato real.
+
+No hubo deploy, ni secretos, ni seed adicional (`variables-java` queda fuera de B2.3b), ni escrituras fuera del seed versionado.
+
 ## Pendientes de A1
 
-1. **B2.3b — seed ficticio**: cargar únicamente `seed/001-datos-ficticios.sql` mediante el endpoint de importación de D1 (transaccional, sin `BEGIN TRANSACTION`). Bloque independiente.
-2. **B2.4 — primer deploy del Worker beta**, tras `npm run beta:build`. Crea el contenedor del Worker y habilita los secrets.
-3. **B2.2 — `DOCUMENT_HMAC_KEY` de beta**: generar y custodiar la clave fuera del agente y cargarla con `wrangler secret put DOCUMENT_HMAC_KEY --env beta` **después** de ese deploy y antes del recorrido de humo.
-4. **B2.5 — recorrido de humo**: `npm run beta:smoke -- https://<host-beta>`.
-5. Export y bookmark del estado verificado; registro del resultado en `docs/estado-actual-interno.md`.
-6. Cierre: decidir si la beta se destruye al terminar A1.
-7. Todo lo de A2 (rate limiting, restablecimiento de contraseña, revocación global de sesiones, limpieza de sesiones y activaciones, auditoría consultable, privacidad, pruebas negativas de authz y revisión de errores) sigue bloqueando el uso con datos reales.
+1. **B2.4 — primer deploy del Worker beta**, tras `npm run beta:build`. Crea el contenedor del Worker y habilita los secrets.
+2. **B2.2 — `DOCUMENT_HMAC_KEY` de beta**: generar y custodiar la clave fuera del agente y cargarla con `wrangler secret put DOCUMENT_HMAC_KEY --env beta` **después** de ese deploy y antes del recorrido de humo.
+3. **B2.5 — recorrido de humo**: `npm run beta:smoke -- https://<host-beta>`.
+4. Export y bookmark del estado verificado; registro del resultado en `docs/estado-actual-interno.md`.
+5. Cierre: decidir si la beta se destruye al terminar A1.
+6. Todo lo de A2 (rate limiting, restablecimiento de contraseña, revocación global de sesiones, limpieza de sesiones y activaciones, auditoría consultable, privacidad, pruebas negativas de authz y revisión de errores) sigue bloqueando el uso con datos reales.
 
 
