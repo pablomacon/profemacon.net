@@ -1,6 +1,6 @@
 # Beta remota ficticia (A1)
 
-Estado: **B1 completado** (preparación local) y **B2.1 completado** (D1 remota ficticia creada y registrada en `env.beta`). **B2.2 — secreto, migraciones y datos ficticios — todavía no se ejecutó.**
+Estado: **B1 completado**, **B2.1 completado** (D1 remota ficticia creada y registrada en `env.beta`) y **B2.2 bloqueado**: Cloudflare no lista ni acepta secrets antes del primer deploy del Worker `profemacon-net-2-beta`, así que el secreto se cargará después de ese deploy. Sin migraciones aplicadas, sin seed, sin Worker desplegado y sin datos reales.
 Última actualización: 23 de septiembre de 2026.
 
 ## A. Propósito
@@ -62,6 +62,8 @@ Si el `database_id` sigue siendo el marcador de ceros, el build lo informa como 
 `DOCUMENT_HMAC_KEY` de beta debe ser **nueva y distinta** de la local y de la futura real. Este documento no contiene su valor y B1 no la generó.
 
 - Generación: 32 bytes aleatorios codificados en `base64url` (43 caracteres) o 64 hex. La implementación exige un mínimo de 32 caracteres y devuelve `503` si no está configurada.
+- **Requisito de orden (verificado el 2026-09-23):** Cloudflare no lista ni acepta secrets de un Worker inexistente. `wrangler secret list --env beta` responde `Worker "profemacon-net-2-beta" (env: beta) not found` y sugiere desplegar primero. Por eso la carga ocurre **después del primer deploy** de la beta y antes del recorrido de humo.
+- **Generación y custodia:** las hace el responsable **fuera del agente** —terminal propia más gestor de contraseñas con la etiqueta `Profe Macón beta — DOCUMENT_HMAC_KEY`—. El valor no se imprime en el agente ni se pega en el chat, porque quedaría persistido en el transcript de la conversación. La carga puede hacerla el responsable directamente o el agente leyendo el valor por *stdin* desde una variable de entorno de usuario; nunca desde un archivo del repositorio.
 - Carga: `wrangler secret put DOCUMENT_HMAC_KEY --env beta` (el valor se escribe por entrada estándar y nunca queda en el repositorio).
 - Verificación sin exponer el valor: `wrangler secret list --env beta` (sólo nombres).
 - Custodia: gestor de contraseñas y registro de fecha/cargador en este documento; nunca en `wrangler.jsonc`, `.dev.vars` versionado, README, docs, capturas ni Git.
@@ -137,15 +139,16 @@ Cada comando remoto se ejecuta de a uno, con la guarda en modo estricto por dela
 
 El `database_id` es un identificador de recurso, no un secreto: se registra aquí y vive en `wrangler.jsonc` → `env.beta.d1_databases[0].database_id`, que es lo que hace que el binding `DB` de la beta resuelva. El entorno local (top-level) conserva `profemacon-beta-local` con el marcador de ceros.
 
-Estado de esa base al 2026-09-23, verificado con lecturas **read-only** (`wrangler d1 info`, `wrangler d1 list --json` y `wrangler d1 migrations list … --remote --env beta`):
+Estado de esa base al 2026-09-23, verificado con lecturas **read-only** (`wrangler d1 info`, `wrangler d1 list --json`):
 
-- `version: production`, `num_tables: 0` → **esquema vacío**, sin tablas;
-- `jurisdiction: null`, 12.3 kB, `read_replication.mode: disabled`;
-- 0 consultas de lectura y 0 de escritura en 24 h;
-- las 10 migraciones (`0001`–`0010`) figuran como **pendientes**;
-- es la **única** D1 de la cuenta y el **único** recurso remoto de A1.
+- `version: production`, 1 tabla: **`d1_migrations`, vacía** (ver corrección más abajo), `jurisdiction: null`, 24.6 kB;
+- 1 consulta de lectura y 1 de escritura en 24 h (3 filas leídas, 5 escritas);
+- las 10 migraciones (`0001`–`0010`) siguen **pendientes**: ninguna se aplicó;
+- es la **única** D1 de la cuenta y el **único** recurso remoto real de A1.
 
-Lo que **no** se hizo en B2.1: ninguna migración aplicada, ningún seed, ningún secreto configurado, ningún Worker desplegado, ninguna escritura de datos, `--location` no fijado, ningún otro recurso creado ni borrado.
+**Corrección del 2026-09-23 (bloque B2.2).** En B2.1 se registró esta base como “vacía” tras ejecutar `wrangler d1 migrations list … --remote --env beta`, presentándolo como lectura estricta. **No lo era**: en Wrangler 4.112 el *handler* de `d1 migrations list` llama a `initMigrationsTable(...)`, que ejecuta `CREATE TABLE IF NOT EXISTS d1_migrations`. Es decir, ese comando **creó la tabla vacía `d1_migrations`** (una escritura: 1 consulta de escritura, 5 filas escritas de contabilidad interna, y el tamaño pasó de 12.3 kB a 24.6 kB). No se aplicó ninguna migración —la tabla quedó sin filas— ni ningún seed, y no existe ninguna otra tabla. Para inspeccionar el esquema remoto sin escribir, el comando correcto es un `SELECT` de `sqlite_master` (`wrangler d1 execute … --command`), nunca `migrations list`.
+
+Lo que **no** se hizo en B2.1: ningún seed, ningún secreto configurado, ningún Worker desplegado, `--location` no fijado, ningún otro recurso creado ni borrado.
 
 ## Estado de verificación de B1
 
@@ -169,16 +172,30 @@ Lo que **no** se hizo en B2.1: ninguna migración aplicada, ningún seed, ningú
 | `node scripts/verify-beta-d1-target.mjs --dry` | 0 · `D1 database_id: REAL (42c1bbd1-…)`; el control local sigue en PLACEHOLDER |
 | `node scripts/verify-beta-d1-target.mjs --require-real` | 0 · destino beta coherente con UUID real |
 | `npm run beta:build` | 0 · aplanado `profemacon-net-2-beta`, `targetEnvironment: beta`, `DB` → `profemacon-beta-remote` (REAL) |
-| `wrangler d1 info` / `d1 list --json` / `migrations list --remote` | base existente, `num_tables: 0`, 10 migraciones pendientes, 0 lecturas y 0 escrituras |
+| `wrangler d1 info` / `d1 list --json` | base existente, creada sin `--location` (ENAM), sin datos |
+| `wrangler d1 migrations list --remote` | 10 migraciones pendientes — pero **no era read-only**: creó la tabla vacía `d1_migrations` (ver §N) |
 | Migraciones · seed · secretos · deploy | **no**, **no**, **no**, **no** |
+
+### Verificación de B2.2 (2026-09-23) — bloqueado por prerequisito
+
+| Verificación | Resultado |
+|---|---|
+| `git status --porcelain -uall` antes de empezar | vacío; `HEAD` = `origin/main` = `24b653d` |
+| `node scripts/verify-beta-d1-target.mjs --require-real` | 0 · Worker `profemacon-net-2-beta`, D1 `profemacon-beta-remote`, `database_id` REAL |
+| `wrangler secret list --env beta` | ✗ `Worker "profemacon-net-2-beta" (env: beta) not found` → *If this is a new Worker, run `wrangler deploy` first to create it* |
+| Clave generada · `secret put` ejecutado · secret existente | **ninguna** · **no** · **no** |
+| Migraciones · seed · deploy · escrituras en D1 | **no** · **no** · **no** · **no** (sólo `d1 info`, lectura) |
+
+**Consecuencia de orden:** el secret se carga **después del primer deploy** del Worker beta y antes del recorrido de humo. Mientras no exista, los endpoints de importación responderían `503` si el Worker estuviera desplegado sin secreto.
 
 ## Pendientes de A1
 
-1. **B2.2 — secreto**: generar y cargar `DOCUMENT_HMAC_KEY` de la beta (nueva, distinta de la local y de la futura real), sin registrar su valor.
-2. **B2.3 — esquema y datos ficticios**: bookmark previo, inventario de esquema, `migrations apply` de `0001`–`0010` y seed exclusivamente con `seed/001-datos-ficticios.sql`.
-3. **B2.4 — deploy beta y recorrido de humo**: `wrangler deploy` tras `npm run beta:build` y `npm run beta:smoke -- https://<host-beta>`.
-4. Export y bookmark del estado verificado; registro del resultado en `docs/estado-actual-interno.md`.
-5. Cierre: decidir si la beta se destruye al terminar A1.
-6. Todo lo de A2 (rate limiting, restablecimiento de contraseña, revocación global de sesiones, limpieza de sesiones y activaciones, auditoría consultable, privacidad, pruebas negativas de authz y revisión de errores) sigue bloqueando el uso con datos reales.
+1. **B2.3 — esquema y datos ficticios**: inventario de esquema read-only (`SELECT` de `sqlite_master`, no `migrations list`), bookmark previo, `migrations apply` de `0001`–`0010` y seed exclusivamente con `seed/001-datos-ficticios.sql`. No requiere el secreto.
+2. **B2.4 — primer deploy del Worker beta**, tras `npm run beta:build`. Crea el contenedor del Worker y habilita los secrets.
+3. **B2.2 — `DOCUMENT_HMAC_KEY` de beta**: generarla y custodiarla fuera del agente y cargarla con `wrangler secret put DOCUMENT_HMAC_KEY --env beta` **después** de ese deploy y antes del recorrido de humo.
+4. **B2.5 — recorrido de humo**: `npm run beta:smoke -- https://<host-beta>`.
+5. Export y bookmark del estado verificado; registro del resultado en `docs/estado-actual-interno.md`.
+6. Cierre: decidir si la beta se destruye al terminar A1.
+7. Todo lo de A2 (rate limiting, restablecimiento de contraseña, revocación global de sesiones, limpieza de sesiones y activaciones, auditoría consultable, privacidad, pruebas negativas de authz y revisión de errores) sigue bloqueando el uso con datos reales.
 
 
