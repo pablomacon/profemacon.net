@@ -14,5 +14,27 @@
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "migrations"
     }
-  ]
+  ],
+  // Entorno beta remoto ficticio. Los bindings no se heredan, por eso `assets` y
+  // `d1_databases` se declaran otra vez con destino remoto explícito.
+  // El `database_id` de ceros es un marcador local: se reemplaza por el UUID real
+  // únicamente al provisionar la D1 remota ficticia, nunca antes.
+  "env": {
+    "beta": {
+      "name": "profemacon-net-2-beta",
+      "workers_dev": true,
+      "assets": {
+        "binding": "ASSETS",
+        "not_found_handling": "single-page-application"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "profemacon-beta-remote",
+          "database_id": "00000000-0000-0000-0000-000000000000",
+          "migrations_dir": "migrations"
+        }
+      ]
+    }
+  }
 }

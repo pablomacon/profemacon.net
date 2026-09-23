@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --configLoader runner",
     "build": "tsc -b && vite build --configLoader runner",
-    "test": "node --test tests/auth-crypto.test.ts tests/student-import.test.ts tests/student-portfolio.test.mjs tests/activation-delivery.test.ts tests/account-activation-admin.test.ts tests/activity-grading.test.ts tests/activity-authoring.test.ts tests/private-activity-files.test.mjs tests/student-activity.test.mjs tests/activity-authoring-pipeline.test.mjs tests/activity-assignment.test.ts tests/activity-assignment-pipeline.test.mjs tests/teacher-group-results.test.mjs tests/teacher-group-activity-results.test.mjs tests/teacher-group-student-results.test.mjs tests/teacher-group-student-attempts.test.mjs tests/material-authoring.test.ts tests/material-authoring-pipeline.test.mjs tests/material-consumption.test.mjs tests/private-material-files.test.mjs",
+    "test": "node --test tests/auth-crypto.test.ts tests/student-import.test.ts tests/student-portfolio.test.mjs tests/activation-delivery.test.ts tests/account-activation-admin.test.ts tests/activity-grading.test.ts tests/activity-authoring.test.ts tests/private-activity-files.test.mjs tests/student-activity.test.mjs tests/activity-authoring-pipeline.test.mjs tests/activity-assignment.test.ts tests/activity-assignment-pipeline.test.mjs tests/teacher-group-results.test.mjs tests/teacher-group-activity-results.test.mjs tests/teacher-group-student-results.test.mjs tests/teacher-group-student-attempts.test.mjs tests/material-authoring.test.ts tests/material-authoring-pipeline.test.mjs tests/material-consumption.test.mjs tests/private-material-files.test.mjs tests/beta-infrastructure.test.mjs",
     "test:student-activity": "node --test tests/student-activity.test.mjs",
     "test:activity-migration:local": "node scripts/verify-activity-security-local.mjs",
     "activity:validate": "node scripts/activity-authoring.mjs validate",
@@ -22,6 +22,9 @@
     "db:migrate:local": "wrangler d1 migrations apply profemacon-beta-local --local",
     "db:seed:local": "wrangler d1 execute profemacon-beta-local --local --file=seed/001-datos-ficticios.sql",
     "db:seed:variables-pilot:local": "wrangler d1 execute profemacon-beta-local --local --file=seed/actividades/programacion-i/unidad-1/variables-java-01.public.sql",
+    "beta:verify-target": "node scripts/verify-beta-d1-target.mjs --dry",
+    "beta:build": "node scripts/build-beta.mjs",
+    "beta:smoke": "node scripts/verify-beta-smoke.mjs",
     "students:preview": "node scripts/preview-student-portfolio.mjs",
     "students:verify-api": "node scripts/verify-student-import-api.mjs"
   },

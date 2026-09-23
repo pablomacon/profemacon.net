@@ -693,3 +693,11 @@ Con el Hito 6 cerrado, el trabajo siguiente queda deliberadamente separado en do
 **B. Evolución funcional — publicación de materiales por grupo y edición.** Sobre las tablas que ya existen (`contenidos`, `versiones_contenido` y `publicaciones_contenido`): decidir qué unidad o material ve cada grupo en cada edición anual, con su estado de publicación, sin tocar Unidad 0 ni Unidad 1. Es la continuación natural del consumo automático de 6D-B y de las deudas registradas en §7.6.
 
 Hasta configurar y custodiar el secreto remoto no deben importarse cuentas reales. El portafolio de 2025 se mantiene únicamente como archivo de validación y no está mapeado a ningún grupo de D1.
+
+## 14. A1 — Infraestructura remota ficticia (en curso)
+
+El 23 de septiembre de 2026 se inició A1 con el objetivo de preparar un primer entorno remoto de Cloudflare **completamente ficticio**, sin datos personales reales. El bloque **B1 — preparación local** quedó completo: existe el entorno `beta` en `wrangler.jsonc` (Worker `profemacon-net-2-beta` y D1 `profemacon-beta-remote` con `database_id` todavía en el marcador de ceros), junto con la guarda local `beta:verify-target`, el build portable `beta:build`, el recorrido de humo ya preparado `beta:smoke`, sus pruebas (`tests/beta-infrastructure.test.mjs`) y el procedimiento en `docs/beta-remota.md`. El entorno top-level local no cambió: sigue siendo el Worker `profemacon-net-2` con la D1 `profemacon-beta-local` y el UUID de ceros.
+
+Hasta aquí **no existe ninguna D1 remota, el Worker no está desplegado y no hay secretos configurados**. Tampoco se creó, modificó ni consultó ningún recurso de Cloudflare, y no se cargó ningún dato real: el seed disponible sigue siendo exclusivamente `seed/001-datos-ficticios.sql`.
+
+El siguiente gate es **B2 — provisionamiento remoto ficticio**, con confirmaciones humanas explícitas: crear la D1 sin `--location`, cargar `DOCUMENT_HMAC_KEY` de beta, aplicar las migraciones `0001`–`0010`, sembrar únicamente el archivo ficticio, desplegar, recorrer el smoke test y anotar el bookmark previo. **A1 todavía no está completo** y sigue prohibido importar cuentas reales.
