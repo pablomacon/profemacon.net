@@ -1,6 +1,6 @@
 # Beta remota ficticia (A1)
 
-Estado: **B1 completado**, **B2.1 completado** (D1 remota creada), **B2.3a completado** (migraciones `0001`–`0010`), **B2.3b completado** (fixtures ficticios) y **B2.4 completado** (primer deploy del Worker beta, ya disponible por HTTPS). **B2.2 sigue pendiente**: `DOCUMENT_HMAC_KEY` todavía no existe y ahora el Worker ya está desplegado, así que el prerequisito quedó resuelto. Sin datos reales.
+Estado: **B1 completado**, **B2.1 completado** (D1 remota creada), **B2.2 completado** (`DOCUMENT_HMAC_KEY` cargado y verificado por nombre), **B2.3a completado** (migraciones `0001`–`0010`), **B2.3b completado** (fixtures ficticios) y **B2.4 completado** (Worker beta desplegado y disponible por HTTPS). Sólo falta **B2.5 — recorrido de humo**. Sin datos reales.
 Última actualización: 23 de septiembre de 2026.
 
 ## A. Propósito
@@ -63,6 +63,7 @@ Si el `database_id` sigue siendo el marcador de ceros, el build lo informa como 
 
 - Generación: 32 bytes aleatorios codificados en `base64url` (43 caracteres) o 64 hex. La implementación exige un mínimo de 32 caracteres y devuelve `503` si no está configurada.
 - **Requisito de orden (verificado el 2026-09-23):** Cloudflare no lista ni acepta secrets de un Worker inexistente. `wrangler secret list --env beta` respondía `Worker "profemacon-net-2-beta" (env: beta) not found` y sugería desplegar primero. **Resuelto en B2.4**: con el Worker ya desplegado, ese comando responde `[]` (lista vacía) y la carga del secreto queda habilitada.
+- **Estado (2026-09-23):** la clave **está cargada** en el environment beta. Fue generada y cargada **manualmente por el responsable, fuera del agente**, y su custodia externa (gestor de contraseñas, etiqueta `Profe Macón beta — DOCUMENT_HMAC_KEY`) está a su cargo. `wrangler secret list --env beta` la lista **por nombre** como `secret_text` y la carga generó una versión de tipo `Secret Change`. Esta documentación **no** registra —y no debe registrar— el valor, ni su prefijo, sufijo, hash o longitud.
 - **Generación y custodia:** las hace el responsable **fuera del agente** —terminal propia más gestor de contraseñas con la etiqueta `Profe Macón beta — DOCUMENT_HMAC_KEY`—. El valor no se imprime en el agente ni se pega en el chat, porque quedaría persistido en el transcript de la conversación. La carga puede hacerla el responsable directamente o el agente leyendo el valor por *stdin* desde una variable de entorno de usuario; nunca desde un archivo del repositorio.
 - Carga: `wrangler secret put DOCUMENT_HMAC_KEY --env beta` (el valor se escribe por entrada estándar y nunca queda en el repositorio).
 - Verificación sin exponer el valor: `wrangler secret list --env beta` (sólo nombres).
@@ -258,12 +259,26 @@ No hubo deploy, ni secretos, ni seed adicional (`variables-java` queda fuera de 
 
 No se configuró ningún secreto, no se ejecutó smoke autenticado, no se aplicaron migraciones ni seeds adicionales, no se configuró dominio propio ni Access, y no hubo reintentos ni segundo deploy.
 
+### Verificación de B2.2 (2026-09-23) — `DOCUMENT_HMAC_KEY` cargado
+
+| Paso | Resultado |
+|---|---|
+| Primer intento (antes del deploy) | Bloqueado: `wrangler secret list --env beta` respondía `Worker "profemacon-net-2-beta" (env: beta) not found` |
+| Carga | realizada **manualmente por el responsable, fuera del agente**: la clave se generó y custodió en su gestor de contraseñas y se cargó con `wrangler secret put DOCUMENT_HMAC_KEY --env beta` |
+| `wrangler secret list --env beta` | `[{ "name": "DOCUMENT_HMAC_KEY", "type": "secret_text" }]` → **un único secret, verificado por nombre** |
+| `wrangler versions list --name profemacon-net-2-beta` | 2 versiones: `2307ceb8-…` (deploy de B2.4) y **`82dea70d-dfa0-4f58-806f-2ab9e285333f`** (2026-09-23T21:31:58.217Z · `Source: Secret Change`) |
+| `wrangler deployments list --name profemacon-net-2-beta` | 2 deployments; el activo al 100 % es el de `Secret Change` |
+| Valor del secret | **nunca pasó por Cline, Git ni esta documentación**; no se registran valor, prefijo, sufijo, hash ni longitud |
+| Deploy de código adicional | **no** |
+| Escrituras adicionales en D1 | **ninguna** |
+
+Con el secret presente, los endpoints `POST /api/student-imports/preview` y `/apply` dejan de responder `503` por clave ausente. Queda B2.5 para comprobarlo de punta a punta.
+
 ## Pendientes de A1
 
-1. **B2.2 — `DOCUMENT_HMAC_KEY` de beta** (ya desbloqueado tras el deploy): generar y custodiar la clave fuera del agente y cargarla con `wrangler secret put DOCUMENT_HMAC_KEY --env beta`. Mientras falte, los endpoints de importación responden `503`.
-2. **B2.5 — recorrido de humo**: `npm run beta:smoke -- https://<host-beta>` (activación ficticia, login, cookies, sesión, cursos, rechazo de la actividad deshabilitada, logout, 401 posterior y `Origin` ajeno).
-3. Export y bookmark del estado verificado; registro del resultado en `docs/estado-actual-interno.md`.
-4. Cierre: decidir si la beta se destruye al terminar A1.
-5. Todo lo de A2 (rate limiting, restablecimiento de contraseña, revocación global de sesiones, limpieza de sesiones y activaciones, auditoría consultable, privacidad, pruebas negativas de authz y revisión de errores) sigue bloqueando el uso con datos reales.
+1. **B2.5 — recorrido de humo**: `npm run beta:smoke -- https://<host-beta>` (activación ficticia, login, cookies, sesión, cursos, rechazo de la actividad deshabilitada, logout, 401 posterior y `Origin` ajeno), más el verificador opcional `students:verify-api` apuntado a la beta.
+2. Export y bookmark del estado verificado; registro del resultado en `docs/estado-actual-interno.md`.
+3. Cierre: decidir si la beta se destruye al terminar A1.
+4. Todo lo de A2 (rate limiting, restablecimiento de contraseña, revocación global de sesiones, limpieza de sesiones y activaciones, auditoría consultable, privacidad, pruebas negativas de authz y revisión de errores) sigue bloqueando el uso con datos reales.
 
 
