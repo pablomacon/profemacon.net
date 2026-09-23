@@ -30,7 +30,15 @@ El resultado de una importación ofrece fichas individuales para copiar o imprim
 
 La ruta docente `/docente/activaciones` permite seleccionar únicamente cuentas todavía sin contraseña dentro de grupos autorizados. La reemisión exige confirmar identidad y motivo, revoca todos los códigos anteriores, crea uno nuevo por 14 días y registra la acción en auditoría sin conservar el código en claro. Una cuenta ya activada queda fuera de este flujo y requiere restablecimiento de contraseña.
 
-Las contraseñas se derivan con PBKDF2-HMAC-SHA-256, sal aleatoria por cuenta y 600.000 iteraciones. Después de cinco fallos la credencial se bloquea durante 15 minutos. Las respuestas de error no distinguen entre usuario, código o contraseña incorrectos.
+Las contraseñas se derivan con PBKDF2-HMAC-SHA-256, sal aleatoria de 16 bytes por cuenta y 32 bytes derivados. La política vive en `worker/auth-crypto.ts` (`PASSWORD_POLICY`) y está versionada por credencial: `credenciales_locales` conserva `algoritmo`, `formato` e `iteraciones`.
+
+- `formato`: `v1` (PBKDF2-HMAC-SHA-256, sal de 16 bytes, derivación de 32 bytes, base64).
+- Objetivo de creación: **100.000** iteraciones. Toda credencial nueva se crea con ese costo.
+- Mínimo verificable: **50.000** iteraciones. Es el mínimo de seguridad que la aplicación acepta *verificar* —no un piso de creación— y una credencial por debajo falla cerrada.
+- Máximo soportado: **100.000** iteraciones, el techo duro del runtime de Cloudflare. WebCrypto rechaza PBKDF2 por encima de ese valor y el tope no es configurable por wrangler, por flags de compatibilidad ni por plan.
+- Rehash al iniciar sesión: **desactivado**. Una segunda derivación en el mismo request duplicaría el costo de CPU y todavía no se midió el `cpuTime` real en Workers; se reevalúa en A2.
+
+La verificación usa siempre el costo persistido en la fila, nunca el objetivo vigente: no hay clamp ni degradación silenciosa. Después de cinco fallos la credencial se bloquea durante 15 minutos. Las respuestas de error no distinguen entre usuario, código o contraseña incorrectos. Una credencial fuera del rango soportado no se verifica, no cuenta como intento fallido, no bloquea la cuenta y no crea sesión: `POST /api/auth/*` responde `500` con `{ code: "INTERNAL_ERROR" }` y un registro de mensaje fijo, sin datos sensibles.
 
 ## Sesiones
 

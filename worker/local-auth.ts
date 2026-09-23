@@ -1,4 +1,4 @@
-import { createPasswordCredential, derivePasswordHash, randomToken, sha256Hex, verifyPassword } from "./auth-crypto";
+import { assertCredencialVerificable, createPasswordCredential, derivePasswordHash, PASSWORD_POLICY, randomToken, sha256Hex, verifyPassword } from "./auth-crypto";
 import { SESSION_COOKIE } from "./auth";
 
 const MAX_BODY_BYTES = 8_192;
@@ -10,6 +10,8 @@ type CredentialRow = {
   username: string;
   displayName: string;
   email: string | null;
+  algorithm: string;
+  format: string;
   iterations: number;
   saltBase64: string;
   hashBase64: string;
@@ -55,8 +57,10 @@ function sqliteTimeToMillis(value: string | null) {
 }
 
 async function consumeComparableWork(password: string) {
+  // Mismo costo que una verificación real, para no distinguir por tiempo entre un
+  // usuario inexistente y una contraseña incorrecta.
   const fixedSalt = new Uint8Array([74, 19, 220, 8, 113, 4, 190, 61, 40, 95, 166, 2, 77, 213, 31, 121]);
-  await derivePasswordHash(password, fixedSalt);
+  await derivePasswordHash(password, fixedSalt, PASSWORD_POLICY.target);
 }
 
 export async function activateLocalAccount(db: D1Database, body: Record<string, unknown>) {
@@ -84,9 +88,16 @@ export async function activateLocalAccount(db: D1Database, body: Record<string, 
   const credential = await createPasswordCredential(password as string);
   await db.batch([
     db.prepare(`
-      INSERT INTO credenciales_locales (usuario_id, iteraciones, sal_base64, hash_base64)
-      VALUES (?1, ?2, ?3, ?4)
-    `).bind(activation.userId, credential.iterations, credential.saltBase64, credential.hashBase64),
+      INSERT INTO credenciales_locales (usuario_id, algoritmo, formato, iteraciones, sal_base64, hash_base64)
+      VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+    `).bind(
+      activation.userId,
+      credential.algorithm,
+      credential.format,
+      credential.iterations,
+      credential.saltBase64,
+      credential.hashBase64,
+    ),
     db.prepare("UPDATE activaciones_cuenta SET consumida_en = CURRENT_TIMESTAMP WHERE id = ?1 AND consumida_en IS NULL").bind(activation.id),
     db.prepare("INSERT INTO eventos_auditoria (actor_usuario_id, accion, entidad_tipo, entidad_id) VALUES (?1, 'cuenta_activada', 'usuario', CAST(?1 AS TEXT))").bind(activation.userId),
   ]);
@@ -101,6 +112,7 @@ export async function loginLocalAccount(db: D1Database, body: Record<string, unk
   const row = await db.prepare(`
     SELECT
       u.id AS userId, u.nombre_usuario AS username, u.nombre_mostrado AS displayName, u.correo AS email,
+      c.algoritmo AS algorithm, c.formato AS format,
       c.iteraciones AS iterations, c.sal_base64 AS saltBase64, c.hash_base64 AS hashBase64,
       c.intentos_fallidos AS failedAttempts, c.bloqueada_hasta AS blockedUntil
     FROM usuarios u
@@ -113,6 +125,11 @@ export async function loginLocalAccount(db: D1Database, body: Record<string, unk
     await consumeComparableWork(password);
     return null;
   }
+
+  // Guarda de política antes de derivar: una credencial fuera del rango soportado
+  // falla cerrada. No cuenta como intento fallido, no bloquea la cuenta, no crea
+  // sesión y no se sustituye el costo por el objetivo vigente.
+  assertCredencialVerificable(row);
 
   if (sqliteTimeToMillis(row.blockedUntil) > Date.now()) return null;
   const passwordMatches = await verifyPassword(password, row.saltBase64, row.hashBase64, row.iterations);

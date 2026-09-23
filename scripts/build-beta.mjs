@@ -8,8 +8,8 @@
 // config aplanado que queda en `dist/`. No despliega, no configura secretos y no
 // ejecuta ningún comando de Wrangler.
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { existsSync, rmSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   BETA_ENVIRONMENT,
@@ -70,6 +70,43 @@ function runStep(label, entryPoint, args) {
   return true;
 }
 
+/**
+ * El plugin de Vite copia el `.dev.vars` local dentro del directorio del artefacto.
+ * Esa copia no debe viajar con el deploy remoto: se elimina de forma explícita
+ * después del build. No se lee, imprime ni compara su contenido, y el `.dev.vars`
+ * del proyecto no se toca.
+ */
+function purgeLocalSecretsCopy(artifactDirectory) {
+  const artifactSecrets = join(artifactDirectory, ".dev.vars");
+  if (!existsSync(artifactSecrets)) {
+    console.log(`Sin copia local de secretos en el artefacto (${relative(projectRoot, artifactSecrets)}).`);
+    return true;
+  }
+  try {
+    rmSync(artifactSecrets, { force: true });
+  } catch {
+    console.error("FALLA No fue posible eliminar la copia local de secretos del artefacto.");
+    return false;
+  }
+  if (existsSync(artifactSecrets)) {
+    console.error("FALLA La copia local de secretos sigue presente en el artefacto.");
+    return false;
+  }
+  console.log(`Copia local de secretos eliminada del artefacto (${relative(projectRoot, artifactSecrets)}).`);
+  return true;
+}
+
+/** Verificación final: el artefacto no puede contener archivos de secretos locales. */
+function artifactHasNoLocalSecrets(artifactDirectory) {
+  const artifactSecrets = join(artifactDirectory, ".dev.vars");
+  if (existsSync(artifactSecrets)) {
+    console.error(`FALLA El artefacto contiene ${relative(projectRoot, artifactSecrets)}. No desplegar.`);
+    return false;
+  }
+  console.log(`Verificado: ${relative(projectRoot, artifactSecrets)} no existe en el artefacto.`);
+  return true;
+}
+
 console.log(`Build beta local con CLOUDFLARE_ENV=${BETA_ENVIRONMENT} y Worker objetivo ${BETA_WORKER_NAME}.`);
 
 try {
@@ -95,6 +132,9 @@ if (flattened === null) {
   process.exit(EXIT_FAILED);
 }
 
+console.log("\n== Higiene del artefacto beta ==");
+if (!purgeLocalSecretsCopy(configDirectory(flattened.path))) process.exit(EXIT_FAILED);
+
 const verification = verifyFlattenedBetaConfig(flattened.config, { configDir: configDirectory(flattened.path) });
 console.log("\n== Verificación del config aplanado beta ==");
 console.log(`Archivo: ${flattened.path}`);
@@ -107,5 +147,6 @@ if (!verification.ok) {
 if (verification.databaseId.kind === "placeholder") {
   console.log("\nAVISO El database_id sigue siendo el marcador de ceros: build local válido, no desplegar todavía.");
 }
+if (!artifactHasNoLocalSecrets(configDirectory(flattened.path))) process.exit(EXIT_FAILED);
 console.log("\nBuild beta local verificado. Este comando no desplegó nada.");
 process.exit(EXIT_OK);

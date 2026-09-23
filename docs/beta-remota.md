@@ -274,9 +274,27 @@ No se configuró ningún secreto, no se ejecutó smoke autenticado, no se aplica
 
 Con el secret presente, los endpoints `POST /api/student-imports/preview` y `/apply` dejan de responder `503` por clave ausente. Queda B2.5 para comprobarlo de punta a punta.
 
+### Verificación de B2.5 (2026-09-23) — FALLIDA por el tope de PBKDF2
+
+| Paso | Resultado |
+|---|---|
+| Comando | `npm run beta:smoke -- https://<host-beta>` (cuenta demo ficticia; la contraseña no se imprimió ni se registró) |
+| `POST /api/auth/activate` | **HTTP 500**; la activación ficticia **no** se consumió |
+| `POST /api/auth/login` (reintento del propio smoke) | **HTTP 500** |
+| Causa exacta (Observability) | `Pbkdf2 failed: iteration counts above 100000 are not supported (requested 600000)` |
+| Alcance del fallo | El runtime de Cloudflare impone un tope duro de 100.000 iteraciones de PBKDF2: no depende del plan y no es configurable en `wrangler.jsonc` |
+| Escrituras en D1 | **ninguna**: la derivación falla antes de `db.batch`; `credenciales_locales = 0`, `sesiones_usuario = 0` y las activaciones demo siguen vigentes hasta 2099 |
+| Datos reales | ninguno: el intento usó sólo la cuenta demo ficticia |
+| Credenciales comprometidas | ninguna: no llegó a crearse ninguna credencial |
+| Estado | **B2.5 NO completado; A1 sigue abierto** |
+
+El arreglo quedó implementado y verificado **sólo en local** (política versionada con rango verificable 50.000–100.000 y objetivo de creación 100.000, migración `0011`, frontera de error saneada y pruebas contra `wrangler dev` real), pero **no se aplicó al remoto**: no se ejecutó `wrangler d1 migrations apply` sobre la D1 beta, no se desplegó el Worker y no se reintentó el smoke. El orden previsto para ese bloque es bookmark, `0011`, verificación de esquema, `beta:build`, deploy, verificación y smoke. `0011` es compatible con el Worker desplegado porque el flujo de autenticación actual falla antes de escribir; el orden inverso, en cambio, violaría el `CHECK` vigente (`>= 600000`).
+
+La decisión sobre Workers Paid **no se toma todavía**: el plan no elimina el tope de PBKDF2, sólo amplía el presupuesto de CPU (Free: 10 ms por request). Después del deploy hay que medir el `cpuTime` real de una activación y un login con 100.000 iteraciones y recién entonces decidir.
+
 ## Pendientes de A1
 
-1. **B2.5 — recorrido de humo**: `npm run beta:smoke -- https://<host-beta>` (activación ficticia, login, cookies, sesión, cursos, rechazo de la actividad deshabilitada, logout, 401 posterior y `Origin` ajeno), más el verificador opcional `students:verify-api` apuntado a la beta.
+1. **B2.5 — recorrido de humo (reintento pendiente)**: el primer intento falló por el tope de PBKDF2 (ver «Verificación de B2.5»). Antes de reintentarlo hay que aplicar `0011` y desplegar el Worker corregido, en ese orden. El recorrido cubre activación ficticia, login, cookies, sesión, cursos, rechazo de la actividad deshabilitada, logout, 401 posterior, 401 de un usuario inexistente y `Origin` ajeno, más el verificador opcional `students:verify-api` apuntado a la beta. Para hacerlo repetible se pasa `BETA_DEMO_PASSWORD` con la contraseña ficticia custodiada fuera del repositorio: la primera corrida consume el código de activación demo y las siguientes inician sesión con esa contraseña. `ana.docente` no se usa ni se consume en este recorrido.
 2. Export y bookmark del estado verificado; registro del resultado en `docs/estado-actual-interno.md`.
 3. Cierre: decidir si la beta se destruye al terminar A1.
 4. Todo lo de A2 (rate limiting, restablecimiento de contraseña, revocación global de sesiones, limpieza de sesiones y activaciones, auditoría consultable, privacidad, pruebas negativas de authz y revisión de errores) sigue bloqueando el uso con datos reales.

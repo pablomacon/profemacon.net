@@ -41,7 +41,7 @@ Las migraciones versionadas están en `migrations/`: núcleo académico (`0001`)
 
 La migración `0003` prepara sesiones con tokens almacenados solamente como hash, asignaciones de docentes y practicantes, materiales versionados, publicaciones por grupo y auditoría. La tabla de identidades externas queda sin uso; la autenticación activa es la implementación local de `0004`.
 
-El acceso no depende de Google: las cuentas son creadas de forma controlada, se activan una sola vez y luego utilizan un nombre de usuario independiente del documento. El Worker expone `POST /api/auth/activate`, `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/session` y `GET /api/me/courses`. Las contraseñas usan PBKDF2-HMAC-SHA-256 con sal única y 600.000 iteraciones; las sesiones vencen después de 30 minutos de inactividad o al alcanzar 8 horas.
+El acceso no depende de Google: las cuentas son creadas de forma controlada, se activan una sola vez y luego utilizan un nombre de usuario independiente del documento. El Worker expone `POST /api/auth/activate`, `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/session` y `GET /api/me/courses`. Las contraseñas usan PBKDF2-HMAC-SHA-256 con sal única y una política de costo versionada por credencial, acotada por el máximo de iteraciones que admite el entorno de ejecución; las sesiones vencen después de 30 minutos de inactividad o al alcanzar 8 horas.
 
 Para probar la activación exclusivamente con datos ficticios locales, después de ejecutar las migraciones y la semilla puede utilizarse `estudiante.demo` con el código `PM-DEMO-ESTUDIANTE-2026`. La interfaz solicitará crear una contraseña de al menos 12 caracteres. Estos datos de demostración no deben copiarse a una base remota.
 

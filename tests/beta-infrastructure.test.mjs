@@ -24,6 +24,7 @@ import {
 const projectRoot = process.cwd();
 const guardScript = join(projectRoot, "scripts", "verify-beta-d1-target.mjs");
 const smokeScript = join(projectRoot, "scripts", "verify-beta-smoke.mjs");
+const buildScript = join(projectRoot, "scripts", "build-beta.mjs");
 const sharedModule = join(projectRoot, "scripts", "beta-target.mjs");
 const realConfigPath = join(projectRoot, "wrangler.jsonc");
 
@@ -328,6 +329,42 @@ test("readBetaTarget y validateBetaTarget describen la configuración real del r
   assert.equal(validateBetaTarget(target, { allowPlaceholder: true }).ok, true);
   // En modo estricto la config real sólo es válida cuando la provisión ya ocurrió.
   assert.equal(validateBetaTarget(target, { allowPlaceholder: false }).ok, state.kind === "real");
+});
+
+// El plugin de Vite copia el `.dev.vars` local dentro del directorio del artefacto.
+// `scripts/build-beta.mjs` es una CLI que compila el proyecto real, así que su
+// comportamiento se comprueba con un contrato de fuente acotado: qué elimina, dónde,
+// en qué orden y con qué corte. La comprobación efectiva sobre `dist/` se hace en la
+// validación de `npm run beta:build`, que verifica que la copia quedó ausente.
+test("el build beta elimina la copia local de secretos del artefacto", () => {
+  const script = readFileSync(buildScript, "utf8");
+  assert.match(script, /\.dev\.vars/, "El build beta debe ocuparse del .dev.vars copiado al artefacto");
+  assert.match(script, /rmSync\(/, "La copia debe eliminarse con rmSync");
+  assert.match(script, /existsSync\(/, "Debe comprobarse la existencia antes y después");
+  assert.match(script, /configDirectory\(flattened\.path\)/, "El objetivo es el directorio del config aplanado");
+
+  // No se lee, imprime ni compara el contenido del archivo de secretos.
+  assert.doesNotMatch(script, /readFileSync/, "El script no debe leer archivos de secretos");
+  assert.doesNotMatch(script, /DOCUMENT_HMAC_KEY|process\.env\.[A-Z_]*SECRET/i);
+
+  // El `.dev.vars` del proyecto no se toca: sólo se opera sobre el artefacto.
+  assert.doesNotMatch(script, /join\(projectRoot, "\.dev\.vars"\)/);
+  assert.doesNotMatch(script, /resolve\(projectRoot, "\.dev\.vars"\)/);
+
+  // Orden: build, limpieza, verificación final del config, comprobación de ausencia y cierre.
+  // Se buscan los puntos de llamada (no las definiciones, que viven más arriba).
+  const viteBuild = script.indexOf('runStep("vite build"');
+  const purge = script.indexOf("purgeLocalSecretsCopy(configDirectory");
+  const verification = script.indexOf("verifyFlattenedBetaConfig(");
+  const finalCheck = script.indexOf("artifactHasNoLocalSecrets(configDirectory");
+  const success = script.indexOf("Build beta local verificado");
+  assert.ok(viteBuild > 0 && purge > viteBuild, "La limpieza debe ocurrir después del build");
+  assert.ok(verification > purge && finalCheck > verification, "La ausencia se confirma al final");
+  assert.ok(success > finalCheck, "El cierre exitoso debe ocurrir después de la comprobación de ausencia");
+
+  // Ambas guardas cortan el proceso con error.
+  assert.match(script, /if \(!purgeLocalSecretsCopy\(.+\)\) process\.exit\(EXIT_FAILED\);/);
+  assert.match(script, /if \(!artifactHasNoLocalSecrets\(.+\)\) process\.exit\(EXIT_FAILED\);/);
 });
 
 

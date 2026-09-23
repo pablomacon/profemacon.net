@@ -17,6 +17,9 @@ const EXIT_USAGE = 2;
 const DEMO_USERNAME = "estudiante.demo";
 const DEMO_ACTIVATION_CODE = "PM-DEMO-ESTUDIANTE-2026";
 const DEMO_PASSWORD = process.env.BETA_DEMO_PASSWORD ?? randomBytes(18).toString("base64url");
+// Contraseña ficticia usada sólo para el sondeo de usuario inexistente: no
+// corresponde a ninguna cuenta, no se persiste y no es un secreto del sistema.
+const UNKNOWN_USER_PASSWORD = "Frase ficticia para un usuario que no existe 2026";
 
 const USAGE = `Uso:
   node scripts/verify-beta-smoke.mjs <base-url> [--allow-http]
@@ -167,6 +170,18 @@ try {
   const afterLogout = await call("/api/session", { cookie });
   record("GET /api/session posterior responde 401", afterLogout.status === 401, `HTTP ${afterLogout.status}`);
   await afterLogout.arrayBuffer();
+
+  // Camino sin escritura: un usuario ficticio inexistente debe responder 401 y
+  // nunca 500. Cubre la regresión de PBKDF2 observada en el primer intento de B2.5.
+  const unknownUser = await call("/api/auth/login", {
+    method: "POST",
+    body: { username: "usuario.inexistente.ficticio", password: UNKNOWN_USER_PASSWORD },
+  });
+  const unknownBody = await unknownUser.json().catch(() => ({}));
+  record("login con usuario inexistente responde 401 y no 500", unknownUser.status === 401,
+    `HTTP ${unknownUser.status}${unknownBody?.code ? ` · ${unknownBody.code}` : ""}`);
+  record("el rechazo del usuario inexistente no filtra detalles",
+    unknownBody?.code !== "INTERNAL_ERROR", unknownBody?.code ?? "sin código");
 
   const foreignOrigin = await call("/api/auth/login", {
     method: "POST",

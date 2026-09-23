@@ -1,4 +1,5 @@
 import { authenticateRequest, listUserRoles } from "./auth";
+import { PasswordPolicyError } from "./auth-crypto";
 import { ActivationAdminError, listActivationCandidates, parseReissuePayload, reissueAccountActivation } from "./account-activation-admin";
 import { listCoursesForUser } from "./course-catalog";
 import { activateLocalAccount, clearSessionCookie, loginLocalAccount, readJsonBody, requestHasValidOrigin, revokeLocalSession, sessionCookie } from "./local-auth";
@@ -28,25 +29,47 @@ function json(data: unknown, status = 200, extraHeaders?: HeadersInit) {
   return new Response(JSON.stringify(data), { status, headers: { ...apiHeaders, ...extraHeaders } });
 }
 
+/**
+ * Rutas POST de /api/auth/*. Se invoca siempre detrás de la frontera de error de
+ * `handleApi`, que traduce cualquier excepción a un 500 saneado.
+ */
+async function handleAuthPost(request: Request, env: Env, url: URL) {
+  if (!requestHasValidOrigin(request)) return json({ error: "Origen de solicitud inválido" }, 403);
+
+  if (url.pathname === "/api/auth/logout") {
+    await revokeLocalSession(request, env.DB);
+    return json({ ok: true }, 200, { "Set-Cookie": clearSessionCookie(request) });
+  }
+
+  const body = await readJsonBody(request);
+  if (!body) return json({ error: "Solicitud inválida" }, 400);
+
+  const session = url.pathname === "/api/auth/activate"
+    ? await activateLocalAccount(env.DB, body)
+    : url.pathname === "/api/auth/login"
+      ? await loginLocalAccount(env.DB, body)
+      : null;
+  if (!session) return json({ error: "No fue posible validar las credenciales" }, 401);
+  return json({ ok: true }, 200, { "Set-Cookie": sessionCookie(session.token, request) });
+}
+
 async function handleApi(request: Request, env: Env, url: URL) {
   if (request.method === "POST" && url.pathname.startsWith("/api/auth/")) {
-    if (!requestHasValidOrigin(request)) return json({ error: "Origen de solicitud inválido" }, 403);
-
-    if (url.pathname === "/api/auth/logout") {
-      await revokeLocalSession(request, env.DB);
-      return json({ ok: true }, 200, { "Set-Cookie": clearSessionCookie(request) });
+    try {
+      return await handleAuthPost(request, env, url);
+    } catch (error) {
+      // Frontera de error de /api/auth/*: una excepción inesperada —incluida una
+      // falla criptográfica o una credencial fuera de política— no debe escapar como
+      // 500 sin contexto controlado. El registro es un mensaje fijo: nunca se
+      // registran contraseña, código de activación, sal, hash, token, secreto ni el
+      // mensaje crudo del error. La respuesta no incluye Set-Cookie.
+      if (error instanceof PasswordPolicyError) {
+        console.error("Credencial local fuera del rango de costo soportado");
+      } else {
+        console.error("Fallo interno en la autenticación local");
+      }
+      return json({ code: "INTERNAL_ERROR", error: "No fue posible completar la operación" }, 500);
     }
-
-    const body = await readJsonBody(request);
-    if (!body) return json({ error: "Solicitud inválida" }, 400);
-
-    const session = url.pathname === "/api/auth/activate"
-      ? await activateLocalAccount(env.DB, body)
-      : url.pathname === "/api/auth/login"
-        ? await loginLocalAccount(env.DB, body)
-        : null;
-    if (!session) return json({ error: "No fue posible validar las credenciales" }, 401);
-    return json({ ok: true }, 200, { "Set-Cookie": sessionCookie(session.token, request) });
   }
 
   if (request.method === "POST" && (url.pathname === "/api/student-imports/preview" || url.pathname === "/api/student-imports/apply")) {
