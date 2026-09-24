@@ -345,8 +345,11 @@ export default {
     const url = new URL(request.url);
     if (url.pathname.startsWith("/api/")) return handleApi(request, env, url);
 
-    // Las rutas de interfaz se resuelven en React. ASSETS continúa sirviendo
-    // los archivos estáticos y permite el mismo fallback en local y producción.
-    return env.ASSETS.fetch(new Request(new URL("/index.html", url), request));
+    // Las rutas de interfaz se resuelven en React. Se sirve la entrada canónica del
+    // shell (`/`) a través de ASSETS: un pedido a `/index.html` no es canónico bajo
+    // `auto-trailing-slash` y el servidor de assets responde `307` hacia `/`, lo que
+    // convertía el fallback en una redirección artificial. La ruta `/` sí es canónica
+    // y resuelve siempre a `index.html` con 200, tanto en local como en producción.
+    return env.ASSETS.fetch(new Request(new URL("/", url), request));
   },
 } satisfies ExportedHandler<Env>;

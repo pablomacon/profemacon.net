@@ -121,9 +121,13 @@ try {
   record("GET / sirve la aplicación", homeBody.includes("Profe Macón 2.0"), "título presente en el HTML");
 
   const course = await call("/curso/programacion-i");
+  const courseBody = await course.text();
+  const courseLocation = course.headers.get("location");
   record("GET /curso/programacion-i responde 200 html",
     course.status === 200 && /text\/html/i.test(course.headers.get("content-type") ?? ""), `HTTP ${course.status}`);
-  await course.arrayBuffer();
+  record("GET /curso/programacion-i no redirige", courseLocation === null, courseLocation ?? "sin Location");
+  record("GET /curso/programacion-i sirve la aplicación", courseBody.includes("Profe Macón 2.0"),
+    "título presente en el HTML");
 
   let authentication = await call("/api/auth/activate", {
     method: "POST",
