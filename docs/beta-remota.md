@@ -1,7 +1,7 @@
 # Beta remota ficticia (A1)
 
-Estado: **B1 completado**, **B2.1 completado** (D1 remota creada), **B2.2 completado** (`DOCUMENT_HMAC_KEY` cargado y verificado por nombre), **B2.3a completado** (migraciones `0001`–`0010`), **B2.3b completado** (fixtures ficticios), **B2.4 completado** (Worker beta desplegado y disponible por HTTPS), **R1 completado** (migración `0011` aplicada en la D1 beta) y **R2 completado** (Worker con PBKDF2 compatible desplegado y verificado por HTTPS). **B2.5 completado** (recorrido de humo ficticio 23/23 sobre el Worker desplegado, con medición de `cpuTime`) y **A1 — infraestructura remota ficticia completada**. Sin datos reales: **A1 no autoriza datos personales reales**.
-Última actualización: 23 de septiembre de 2026.
+Estado: **B1 completado**, **B2.1 completado** (D1 remota creada), **B2.2 completado** (`DOCUMENT_HMAC_KEY` cargado y verificado por nombre), **B2.3a completado** (migraciones `0001`–`0010`), **B2.3b completado** (fixtures ficticios), **B2.4 completado** (Worker beta desplegado y disponible por HTTPS), **R1 completado** (migración `0011` aplicada en la D1 beta) y **R2 completado** (Worker con PBKDF2 compatible desplegado y verificado por HTTPS). **B2.5 completado** (recorrido de humo ficticio 23/23 sobre el Worker desplegado, con medición de `cpuTime`) y **A1 — infraestructura remota ficticia completada**. Sin datos reales: **A1 no autoriza datos personales reales**. **A2.1a-R1 (2026-09-24): la migración `0012` NO se aplicó en la D1 beta** —bloqueada por un defecto de la herramienta con finales de línea CRLF y disparadores (`workers-sdk` #14991)—; el remoto quedó **intacto** y el arreglo (`.gitattributes` + LF) está preparado en local (ver «A2.1a-R1 — Intento de aplicar `0012`…»).
+Última actualización: 24 de septiembre de 2026.
 
 ## A. Propósito
 
@@ -88,6 +88,8 @@ Según la documentación de Cloudflare, una migración que falla se revierte, mi
 3. si algo queda inservible, **reconstruir la D1 ficticia** (borrar, crear, migrar, sembrar) es la contingencia primaria, y Time Travel la secundaria.
 
 No se escribe SQL de reversión a mano: las migraciones no son reversibles.
+
+> **Regla de finales de línea (2026-09-24).** Los archivos de `migrations/` deben llegar a Wrangler **en LF**. La ruta remota lee el archivo del árbol de trabajo, y `wrangler d1 migrations apply --remote` falla con `incomplete input: SQLITE_ERROR [code: 7500]` cuando ese archivo tiene **CRLF** y contiene un **disparador** (`BEGIN … END;`): `workers-sdk` #14991, refinado por #15314. En Windows, `core.autocrlf = true` reescribe estos archivos con CRLF en cada checkout, así que el repositorio fija `migrations/*.sql text eol=lf` en `.gitattributes` y `tests/beta-infrastructure.test.mjs` lo verifica. Antes de cualquier aplicación remota, `git ls-files --eol migrations` debe mostrar `w/lf` en todas. La aplicación local (`--local`) no se ve afectada, porque SQLite parsea el archivo completo. El primer intento remoto de `0012` quedó bloqueado por esto (ver «A2.1a-R1 — Intento de aplicar `0012`…»).
 
 ## J. Datos ficticios
 
@@ -385,6 +387,28 @@ Durante el recorrido se siguió el Worker con `wrangler tail --env beta --format
 **Conclusión registrada:** PBKDF2 a 100.000 iteraciones **funciona en producción sin ningún límite de CPU**: el costo medido de la derivación es de **28 ms** al crear la credencial y **22 ms** al verificarla, el recorrido completo terminó con `outcome: ok` y no apareció `1102` ni `Pbkdf2 failed`. **El plan vigente de la cuenta alcanza para este recorrido y no corresponde contratar un plan pago por estimación.** Salvedad explícita: la cifra histórica de referencia de 10 ms de CPU por request para el plan Free no coincide con el `cpuTime` medido —`cpuTime` no es `wallTime`—, el nivel del plan de la cuenta debe confirmarse en el panel de Cloudflare antes de dimensionar carga real, y esta medición es una muestra de un flujo ficticio de una sola corrida: no es una prueba de carga ni una autorización para tráfico real.
 
 
+## A2.1a-R1 — Intento de aplicar `0012` en la D1 beta (2026-09-24): NO aplicada
+
+Registro del primer bloque remoto de A2.1a. Se ejecutó con autorización humana explícita y terminó **sin aplicar nada**: el remoto quedó exactamente como estaba.
+
+| Paso | Resultado |
+|---|---|
+| Preflight | `git status --porcelain -uall` **vacío** · `HEAD` = `origin/main` = `a01c961` · `git rev-list --left-right --count HEAD...origin/main` = `0 0` · `node scripts/verify-beta-d1-target.mjs --require-real` → exit **0** |
+| Estado previo de la D1 (sólo `SELECT`/`PRAGMA`) | `d1_migrations` = **11** (última `0011`) · `usuarios` y `sesiones_usuario` **sin** `auth_version` · 2 usuarios · 1 credencial local · 1 sesión histórica · 1 grupo · activaciones demo (estudiante consumida, docente sin consumir) · `pragma_foreign_key_check` = **0** · inventario: 118 objetos (29 tablas, 56 índices, 33 disparadores). Nunca se usó `migrations list --remote` |
+| Bookmark previo | `00000012-00000000-000050f0-b08ff47f120dbddc33f36f04be8a88ba` (registrado; **no** se ejecutó `restore`) |
+| Gate humano | se mostró el comando exacto, la D1 destino, el `database_id`, `d1_migrations` = 11, el bookmark previo y el nombre exacto de la migración, y se esperó **autorización explícita** |
+| Comando ejecutado (**una sola** escritura autorizada) | `wrangler d1 migrations apply profemacon-beta-remote --remote --env beta` (binario local, Wrangler 4.112.0). Anunció **una sola** migración pendiente: `0012_auth_version_sesiones.sql` |
+| Resultado | **HTTP 400** de la API de D1 → `incomplete input: SQLITE_ERROR [code: 7500]` · exit 1 · **nada aplicado** (migración atómica) |
+| `d1_migrations` posterior | **11** — `0012` sigue ausente |
+| Esquema posterior | **sin cambios**: sin `auth_version` en `usuarios` ni en `sesiones_usuario`; 33 disparadores (sin los dos de `0012`); inventario idéntico al baseline (`Compare-Object` = **0**) |
+| Datos posteriores | 2 usuarios · 1 credencial · 1 sesión · 1 grupo · `pragma_foreign_key_check` = **0** · `size_after` 401408 → 401408 |
+| Causa | defecto de la herramienta: `d1 migrations apply --remote` falla con **CRLF + disparadores** (`workers-sdk` **#14991**, refinado por **#15314**). Causa inmediata local: `core.autocrlf = true` **sin `.gitattributes`**, que dejaba `0011` y `0012` en CRLF en el árbol de trabajo (el índice siempre estuvo en LF) |
+| Comprobaciones locales del SQL | el splitter de Wrangler sobre `0012` produce **5 sentencias completas y válidas** · `tests/auth-session-revocation.test.mjs` aplica `0012` sin errores por la ruta local (**10/10**) · `tests/beta-infrastructure.test.mjs` **21/21** |
+| Arreglo preparado (sólo local) | `.gitattributes` con `migrations/*.sql text eol=lf` · árbol de trabajo de `0011` y `0012` normalizado a LF (contenido idéntico al comprometido, verificado por SHA-256) · guarda nueva en `tests/beta-infrastructure.test.mjs` |
+| No se ejecutó | deploy del Worker · seeds · `secret put` · `revokeAllSessions` · ningún `auth_version > 1` · ningún smoke, login, activación o logout |
+
+**Estado transitorio.** El remoto sigue en el **esquema `0011`** con el Worker desplegado en R2/B2.5 y **no recibió ninguna escritura** en este bloque. `A2.1a-R1` queda **abierto**: el reintento (una sola escritura, ya con el árbol en LF) requiere autorización humana explícita, y `A2.1a-R2` —deploy del Worker versionado— sigue pendiente detrás de él.
+
 ## Pendientes tras A1
 
 **Estado: A1 — infraestructura remota ficticia COMPLETADA.** Los bloques B1, B2.1, B2.2, B2.3a, B2.3b, B2.4, R1, R2 y B2.5 quedaron cerrados y verificados sobre recursos remotos ficticios, sin ningún dato real en ningún momento. **A1 no autoriza datos personales reales**: la beta sigue conteniendo sólo fixtures ficticios y su URL sigue sin publicitarse. **Siguiente fase: A2 — seguridad operacional**, que no se inicia automáticamente.
@@ -394,5 +418,6 @@ Durante el recorrido se siguió el Worker con `wrangler tail --env beta --format
 2. Export y bookmark del estado verificado. El registro del resultado ya se hizo en `docs/estado-actual-interno.md` §14 (B2.5 completado y A1 cerrada).
 3. Cierre: decidir si la beta se destruye al terminar A1.
 4. Todo lo de A2 (rate limiting, restablecimiento de contraseña, revocación global de sesiones, limpieza de sesiones y activaciones, auditoría consultable, privacidad, pruebas negativas de authz y revisión de errores) sigue bloqueando el uso con datos reales.
+5. **A2.1a-R1 — reintento de `0012`: PENDIENTE (bloqueado por finales de línea).** El primer intento remoto (2026-09-24) **no aplicó nada** por el defecto de `d1 migrations apply --remote` con CRLF + disparadores (workers-sdk #14991). El arreglo local ya está preparado —`.gitattributes` con `migrations/*.sql text eol=lf`, árbol de trabajo en LF y guarda en `tests/beta-infrastructure.test.mjs`—, pero el reintento (una sola escritura) no se ejecuta sin autorización humana explícita. `A2.1a-R2` (deploy del Worker versionado) depende de que `0012` esté aplicada.
 
 
