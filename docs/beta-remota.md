@@ -292,9 +292,29 @@ El arreglo quedó implementado y verificado **sólo en local** (política versio
 
 La decisión sobre Workers Paid **no se toma todavía**: el plan no elimina el tope de PBKDF2, sólo amplía el presupuesto de CPU (Free: 10 ms por request). Después del deploy hay que medir el `cpuTime` real de una activación y un login con 100.000 iteraciones y recién entonces decidir.
 
+### Verificación de R1 (2026-09-23) — migración `0011` aplicada en la D1 beta
+
+| Paso | Resultado |
+|---|---|
+| Preflight | `git status` limpio · `HEAD` = `origin/main` = `ac57cc7` · `node scripts/verify-beta-d1-target.mjs --require-real` → exit 0 |
+| Estado previo (sólo `SELECT`) | `credenciales_locales` = **0** · filas fuera del rango `50000`–`100000` = **0** · `d1_migrations` = **10** (`0001`–`0010`) · `pragma_foreign_key_check` = **0** · esquema de `0004` con `CHECK (iteraciones >= 600000)` y sin `formato` · fixtures: 2 usuarios, 1 grupo, 2 activaciones vigentes sin consumir, 0 sesiones, 0 intentos |
+| Bookmark pre-`0011` | `0000000b-00000005-000050f0-768c7f8e957f7811f83db06306b8f754` (registrado; **no** se ejecutó `restore`) |
+| Escritura remota | **una sola**: `wrangler d1 migrations apply profemacon-beta-remote --remote --env beta` (sin `-y`; Wrangler usó su valor por defecto en contexto no interactivo) |
+| Resultado | `Migrations to be applied: 0011_costo_password_compatible.sql` → ejecutada (11 comandos) con estado ✅ |
+| `d1_migrations` posterior | **11** filas, ids 1–11, sin duplicados, última `0011_costo_password_compatible.sql` |
+| Esquema posterior | `algoritmo` con allowlist `IN ('pbkdf2-sha256')` · `formato TEXT NOT NULL DEFAULT 'v1' CHECK (formato IN ('v1'))` · `iteraciones INTEGER NOT NULL CHECK (iteraciones BETWEEN 50000 AND 100000)` · resto de columnas y defaults conservados |
+| `PRAGMA table_info` | `usuario_id` (pk), `algoritmo`, `formato`, `iteraciones`, `sal_base64`, `hash_base64`, `intentos_fallidos`, `bloqueada_hasta`, `establecida_en`, `actualizada_en` |
+| Datos posteriores | `credenciales_locales` = **0** · fuera de rango = **0** · usuarios 2 · grupos 1 · activaciones 2 vigentes sin consumir · sesiones 0 · intentos 0 → **ningún fixture cambió** |
+| Integridad | `pragma_foreign_key_check` = **0** · 26 tablas de dominio · 24 índices · 33 disparadores (mismo inventario que B2.3a) · sin tablas auxiliares (`credenciales_locales_nueva`, `verificacion_costo_*`) |
+| Lecturas | todas las consultas de verificación informaron `rows_written: 0` y `changed_db: false` |
+
+**Estado transitorio aceptado: esquema nuevo + Worker viejo.** El Worker desplegado sigue siendo el de B2.4 (PBKDF2 con 600.000 iteraciones, que el runtime rechaza) y **no se desplegó código**. Es seguro porque el flujo de autenticación anterior ya **no podía completar** la derivación —fallaba antes de escribir— y `credenciales_locales` sigue con **0 filas**, así que no existe ninguna credencial que pudiera quedar ilegible con el `CHECK` nuevo. La ventana se cierra con el deploy del Worker compatible (**Fase R2**).
+
+No hubo deploy, ni seed, ni `secret put`, ni smoke, ni activaciones, ni login, ni datos reales. **B2.5 sigue pendiente y A1 sigue abierto.**
+
 ## Pendientes de A1
 
-1. **B2.5 — recorrido de humo (reintento pendiente)**: el primer intento falló por el tope de PBKDF2 (ver «Verificación de B2.5»). Antes de reintentarlo hay que aplicar `0011` y desplegar el Worker corregido, en ese orden. El recorrido cubre activación ficticia, login, cookies, sesión, cursos, rechazo de la actividad deshabilitada, logout, 401 posterior, 401 de un usuario inexistente y `Origin` ajeno, más el verificador opcional `students:verify-api` apuntado a la beta. Para hacerlo repetible se pasa `BETA_DEMO_PASSWORD` con la contraseña ficticia custodiada fuera del repositorio: la primera corrida consume el código de activación demo y las siguientes inician sesión con esa contraseña. `ana.docente` no se usa ni se consume en este recorrido.
+1. **B2.5 — recorrido de humo (reintento pendiente)**: el primer intento falló por el tope de PBKDF2 (ver «Verificación de B2.5»). `0011` ya está aplicada en la D1 beta (ver «Verificación de R1»), así que el paso que falta es desplegar el Worker compatible (Fase R2) y recién después reintentar el recorrido. El recorrido cubre activación ficticia, login, cookies, sesión, cursos, rechazo de la actividad deshabilitada, logout, 401 posterior, 401 de un usuario inexistente y `Origin` ajeno, más el verificador opcional `students:verify-api` apuntado a la beta. Para hacerlo repetible se pasa `BETA_DEMO_PASSWORD` con la contraseña ficticia custodiada fuera del repositorio: la primera corrida consume el código de activación demo y las siguientes inician sesión con esa contraseña. `ana.docente` no se usa ni se consume en este recorrido.
 2. Export y bookmark del estado verificado; registro del resultado en `docs/estado-actual-interno.md`.
 3. Cierre: decidir si la beta se destruye al terminar A1.
 4. Todo lo de A2 (rate limiting, restablecimiento de contraseña, revocación global de sesiones, limpieza de sesiones y activaciones, auditoría consultable, privacidad, pruebas negativas de authz y revisión de errores) sigue bloqueando el uso con datos reales.
