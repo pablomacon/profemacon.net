@@ -1,6 +1,6 @@
 # Beta remota ficticia (A1)
 
-Estado: **B1 completado**, **B2.1 completado** (D1 remota creada), **B2.2 completado** (`DOCUMENT_HMAC_KEY` cargado y verificado por nombre), **B2.3a completado** (migraciones `0001`–`0010`), **B2.3b completado** (fixtures ficticios) y **B2.4 completado** (Worker beta desplegado y disponible por HTTPS). Sólo falta **B2.5 — recorrido de humo**. Sin datos reales.
+Estado: **B1 completado**, **B2.1 completado** (D1 remota creada), **B2.2 completado** (`DOCUMENT_HMAC_KEY` cargado y verificado por nombre), **B2.3a completado** (migraciones `0001`–`0010`), **B2.3b completado** (fixtures ficticios), **B2.4 completado** (Worker beta desplegado y disponible por HTTPS), **R1 completado** (migración `0011` aplicada en la D1 beta) y **R2 completado** (Worker con PBKDF2 compatible desplegado y verificado por HTTPS). Sólo falta **B2.5 — recorrido de humo**. Sin datos reales.
 Última actualización: 23 de septiembre de 2026.
 
 ## A. Propósito
@@ -308,13 +308,38 @@ La decisión sobre Workers Paid **no se toma todavía**: el plan no elimina el t
 | Integridad | `pragma_foreign_key_check` = **0** · 26 tablas de dominio · 24 índices · 33 disparadores (mismo inventario que B2.3a) · sin tablas auxiliares (`credenciales_locales_nueva`, `verificacion_costo_*`) |
 | Lecturas | todas las consultas de verificación informaron `rows_written: 0` y `changed_db: false` |
 
-**Estado transitorio aceptado: esquema nuevo + Worker viejo.** El Worker desplegado sigue siendo el de B2.4 (PBKDF2 con 600.000 iteraciones, que el runtime rechaza) y **no se desplegó código**. Es seguro porque el flujo de autenticación anterior ya **no podía completar** la derivación —fallaba antes de escribir— y `credenciales_locales` sigue con **0 filas**, así que no existe ninguna credencial que pudiera quedar ilegible con el `CHECK` nuevo. La ventana se cierra con el deploy del Worker compatible (**Fase R2**).
+**Estado transitorio aceptado: esquema nuevo + Worker viejo.** El Worker desplegado sigue siendo el de B2.4 (PBKDF2 con 600.000 iteraciones, que el runtime rechaza) y **no se desplegó código**. Es seguro porque el flujo de autenticación anterior ya **no podía completar** la derivación —fallaba antes de escribir— y `credenciales_locales` sigue con **0 filas**, así que no existe ninguna credencial que pudiera quedar ilegible con el `CHECK` nuevo. La ventana se cerró el 2026-09-23 con el deploy del Worker compatible (**Fase R2**, ver «Verificación de R2»).
 
 No hubo deploy, ni seed, ni `secret put`, ni smoke, ni activaciones, ni login, ni datos reales. **B2.5 sigue pendiente y A1 sigue abierto.**
 
+### Verificación de R2 (2026-09-23) — Worker con PBKDF2 compatible desplegado
+
+| Paso | Resultado |
+|---|---|
+| Preflight | `git status --porcelain -uall` **vacío** · `HEAD` = `origin/main` = `c1054c5` · `git rev-list --left-right --count HEAD...origin/main` = `0 0` · `node scripts/verify-beta-d1-target.mjs --require-real` → exit **0** |
+| Estado previo de la D1 (sólo `SELECT`/`PRAGMA`) | `d1_migrations` = **11** · `credenciales_locales` = **0** · `pragma_foreign_key_check` = **0** · 2 usuarios · 0 sesiones · todas las consultas con `rows_written: 0` y `changed_db: false` |
+| `npm run beta:build` | exit **0** · aplanado `profemacon-net-2-beta`, `targetEnvironment: beta`, `DB` → `profemacon-beta-remote` (**REAL**), `ASSETS` → `../client` con fallback de página única e `index.html` verificado, `vars: {}` · la copia local de secretos (`dist/profemacon_net_2/.dev.vars`) quedó **eliminada del artefacto** y su ausencia verificada (`0` coincidencias de `.dev.vars*` en `dist/`) |
+| Estado del Worker antes | `versions list` → 2 versiones (`2307ceb8-…` de B2.4 y `82dea70d-…` de `Secret Change`) · `deployments status` → activo al 100 % **`82dea70d-dfa0-4f58-806f-2ab9e285333f`** |
+| Gate humano | se mostró el comando exacto, el Worker y la D1 destino, la versión activa y el alcance (cambia código; no ejecuta smoke; no toca D1; no cambia secretos) y se esperó **autorización explícita** |
+| Comando ejecutado (**una sola vez**) | `wrangler deploy --config dist/profemacon_net_2/wrangler.json` (binario local `node_modules\.bin\wrangler.cmd`, Wrangler 4.112.0; `wrangler` no está en el `PATH`) |
+| Resultado | 85 archivos leídos de `dist/client` · **0 assets nuevos** (huellas idénticas a las ya publicadas) · Total Upload 121.80 KiB (gzip 22.39 KiB) · bindings `env.DB (profemacon-beta-remote)` → D1 Database y `env.ASSETS` → Assets · `Uploaded profemacon-net-2-beta` · `Deployed profemacon-net-2-beta triggers` · exit **0** |
+| **Version ID nuevo (activo)** | **`07d2b360-ad43-4c3c-8304-9c4ccfca8b72`** (2026-09-24T02:11:15.076Z · deployment 2026-09-24T02:11:16.436Z al 100 %) |
+| **Versión anterior (rollback)** | `82dea70d-dfa0-4f58-806f-2ab9e285333f` (`Secret Change`, 2026-09-23T21:31:58.217Z) · código previo de B2.4: `2307ceb8-7467-4c54-baac-f5e4368c58b3` |
+| URL | `https://profemacon-net-2-beta.pablomacon.workers.dev` (registro interno, no publicitar) |
+| `wrangler secret list --env beta` | `[{ "name": "DOCUMENT_HMAC_KEY", "type": "secret_text" }]` → **sin cambios**, sigue presente; no se ejecutó `secret put` |
+| HTTPS `GET /` | **200** `text/html` |
+| HTTPS `GET /curso/programacion-i` | **200** `text/html` **sin `Location` ni 307** (el fallback SPA quedó corregido) |
+| HTTPS `/api/session` sin cookie | **401** `application/json; charset=utf-8` (`{"error":"Sesión requerida"}`) |
+| Métodos usados en la verificación HTTPS | sólo `GET`: **ningún `POST`** |
+| D1 posterior | **ninguna escritura**: `d1_migrations` = 11 · `credenciales_locales` = 0 · `usuarios` = 2 · `grupos` = 1 · activaciones demo vigentes sin consumir = **2** · `sesiones_usuario` = 0 · `pragma_foreign_key_check` = **0** (`rows_written: 0`, `changed_db: false`) |
+| Pruebas locales | `node --test tests/beta-infrastructure.test.mjs` → **20/20** aprobadas · `git diff --check` → sin hallazgos |
+| Migraciones y seeds | **ninguno**: `0011` ya estaba aplicada desde R1 y este bloque no las volvió a ejecutar |
+
+El deploy no activó cuentas, no inició sesión, no ejecutó `beta:smoke`, no aplicó migraciones ni seeds, no tocó `DOCUMENT_HMAC_KEY` y no escribió en D1. Con el Worker compatible ya desplegado, **B2.5 — recorrido de humo** es el único paso que falta antes de medir el `cpuTime` real de 100.000 iteraciones. **B2.5 todavía no fue ejecutado y A1 sigue abierto.**
+
 ## Pendientes de A1
 
-1. **B2.5 — recorrido de humo (reintento pendiente)**: el primer intento falló por el tope de PBKDF2 (ver «Verificación de B2.5»). `0011` ya está aplicada en la D1 beta (ver «Verificación de R1»), así que el paso que falta es desplegar el Worker compatible (Fase R2) y recién después reintentar el recorrido. El recorrido cubre activación ficticia, login, cookies, sesión, cursos, rechazo de la actividad deshabilitada, logout, 401 posterior, 401 de un usuario inexistente y `Origin` ajeno, más el verificador opcional `students:verify-api` apuntado a la beta. Para hacerlo repetible se pasa `BETA_DEMO_PASSWORD` con la contraseña ficticia custodiada fuera del repositorio: la primera corrida consume el código de activación demo y las siguientes inician sesión con esa contraseña. `ana.docente` no se usa ni se consume en este recorrido.
+1. **B2.5 — recorrido de humo (reintento pendiente)**: el primer intento falló por el tope de PBKDF2 (ver «Verificación de B2.5»). `0011` ya está aplicada en la D1 beta (ver «Verificación de R1»), así que, con el Worker compatible ya desplegado y verificado (ver «Verificación de R2»), el único paso que falta es reintentar el recorrido. El recorrido cubre activación ficticia, login, cookies, sesión, cursos, rechazo de la actividad deshabilitada, logout, 401 posterior, 401 de un usuario inexistente y `Origin` ajeno, más el verificador opcional `students:verify-api` apuntado a la beta. Para hacerlo repetible se pasa `BETA_DEMO_PASSWORD` con la contraseña ficticia custodiada fuera del repositorio: la primera corrida consume el código de activación demo y las siguientes inician sesión con esa contraseña. `ana.docente` no se usa ni se consume en este recorrido.
 2. Export y bookmark del estado verificado; registro del resultado en `docs/estado-actual-interno.md`.
 3. Cierre: decidir si la beta se destruye al terminar A1.
 4. Todo lo de A2 (rate limiting, restablecimiento de contraseña, revocación global de sesiones, limpieza de sesiones y activaciones, auditoría consultable, privacidad, pruebas negativas de authz y revisión de errores) sigue bloqueando el uso con datos reales.
