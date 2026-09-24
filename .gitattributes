@@ -1,0 +1,12 @@
+# Finales de línea de las migraciones de D1.
+#
+# `wrangler d1 migrations apply --remote` envía el archivo de migración tal como está en el
+# disco y falla con "incomplete input: SQLITE_ERROR [code: 7500]" cuando ese archivo tiene
+# CRLF y contiene un disparador (cuerpo BEGIN … END;): es el defecto de workers-sdk #14991,
+# refinado en #15314. En Windows, `core.autocrlf=true` convierte estos archivos a CRLF en el
+# checkout, así que esta regla mantiene el árbol de trabajo siempre en LF.
+#
+# La ruta local (`d1 migrations apply --local`) no se ve afectada, porque SQLite parsea el
+# archivo completo. El primer intento remoto de `0012` en la beta quedó bloqueado por este
+# defecto (ver A2.1a-R1 en docs/estado-actual-interno.md).
+migrations/*.sql text eol=lf

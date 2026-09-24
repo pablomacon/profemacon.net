@@ -5,7 +5,7 @@
 // config aplanado que deja el plugin de Vite y el rechazo del smoke test sin URL.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -365,6 +365,38 @@ test("el build beta elimina la copia local de secretos del artefacto", () => {
   // Ambas guardas cortan el proceso con error.
   assert.match(script, /if \(!purgeLocalSecretsCopy\(.+\)\) process\.exit\(EXIT_FAILED\);/);
   assert.match(script, /if \(!artifactHasNoLocalSecrets\(.+\)\) process\.exit\(EXIT_FAILED\);/);
+});
+
+// workers-sdk #14991 (refinado por #15314): `wrangler d1 migrations apply --remote` falla con
+// "incomplete input: SQLITE_ERROR [code: 7500]" cuando el archivo de migración tiene finales
+// de línea CRLF y contiene un disparador (cuerpo BEGIN … END;). La ruta remota lee el archivo
+// del árbol de trabajo, así que ese archivo debe estar en LF: en Windows, `core.autocrlf=true`
+// reescribe `migrations/*.sql` con CRLF en cada checkout. A2.1a-R1 quedó bloqueado por eso;
+// la regla de `.gitattributes` y esta guarda evitan que vuelva a ocurrir sin aviso.
+test("las migraciones quedan en LF y .gitattributes fuerza LF en el checkout", () => {
+  const attributesPath = join(projectRoot, ".gitattributes");
+  assert.equal(existsSync(attributesPath), true, "Debe existir .gitattributes con la regla de fin de línea");
+  const attributes = readFileSync(attributesPath, "utf8");
+  assert.match(
+    attributes,
+    /^migrations\/\*\.sql[ \t]+text[ \t]+eol=lf[ \t]*$/m,
+    "La regla debe forzar LF para todas las migraciones",
+  );
+
+  const migrationsDirectory = join(projectRoot, "migrations");
+  const files = readdirSync(migrationsDirectory).filter((name) => name.endsWith(".sql"));
+  assert.ok(files.length > 0, "Debe haber migraciones versionadas");
+
+  for (const file of files) {
+    const bytes = readFileSync(join(migrationsDirectory, file));
+    assert.equal(
+      bytes.includes(0x0d),
+      false,
+      `${file} contiene CR: un checkout de Windows rompería d1 migrations apply --remote`,
+    );
+    const hasBom = bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf;
+    assert.equal(hasBom, false, `${file} no debe empezar con BOM`);
+  }
 });
 
 
