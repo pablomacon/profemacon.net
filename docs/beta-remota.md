@@ -1,6 +1,6 @@
 # Beta remota ficticia (A1)
 
-Estado: **B1 completado**, **B2.1 completado** (D1 remota creada), **B2.2 completado** (`DOCUMENT_HMAC_KEY` cargado y verificado por nombre), **B2.3a completado** (migraciones `0001`–`0010`), **B2.3b completado** (fixtures ficticios), **B2.4 completado** (Worker beta desplegado y disponible por HTTPS), **R1 completado** (migración `0011` aplicada en la D1 beta) y **R2 completado** (Worker con PBKDF2 compatible desplegado y verificado por HTTPS). Sólo falta **B2.5 — recorrido de humo**. Sin datos reales.
+Estado: **B1 completado**, **B2.1 completado** (D1 remota creada), **B2.2 completado** (`DOCUMENT_HMAC_KEY` cargado y verificado por nombre), **B2.3a completado** (migraciones `0001`–`0010`), **B2.3b completado** (fixtures ficticios), **B2.4 completado** (Worker beta desplegado y disponible por HTTPS), **R1 completado** (migración `0011` aplicada en la D1 beta) y **R2 completado** (Worker con PBKDF2 compatible desplegado y verificado por HTTPS). **B2.5 completado** (recorrido de humo ficticio 23/23 sobre el Worker desplegado, con medición de `cpuTime`) y **A1 — infraestructura remota ficticia completada**. Sin datos reales: **A1 no autoriza datos personales reales**.
 Última actualización: 23 de septiembre de 2026.
 
 ## A. Propósito
@@ -274,7 +274,7 @@ No se configuró ningún secreto, no se ejecutó smoke autenticado, no se aplica
 
 Con el secret presente, los endpoints `POST /api/student-imports/preview` y `/apply` dejan de responder `503` por clave ausente. Queda B2.5 para comprobarlo de punta a punta.
 
-### Verificación de B2.5 (2026-09-23) — FALLIDA por el tope de PBKDF2
+### Verificación de B2.5 (2026-09-23) — primer intento FALLIDO por el tope de PBKDF2
 
 | Paso | Resultado |
 |---|---|
@@ -286,7 +286,7 @@ Con el secret presente, los endpoints `POST /api/student-imports/preview` y `/ap
 | Escrituras en D1 | **ninguna**: la derivación falla antes de `db.batch`; `credenciales_locales = 0`, `sesiones_usuario = 0` y las activaciones demo siguen vigentes hasta 2099 |
 | Datos reales | ninguno: el intento usó sólo la cuenta demo ficticia |
 | Credenciales comprometidas | ninguna: no llegó a crearse ninguna credencial |
-| Estado | **B2.5 NO completado; A1 sigue abierto** |
+| Estado al terminar ese intento | **B2.5 no completado**; luego se corrigió el tope (R1/R2) y el reintento quedó verde (ver «Verificación de B2.5 (2026-09-23) — COMPLETADA») |
 
 El arreglo quedó implementado y verificado **sólo en local** (política versionada con rango verificable 50.000–100.000 y objetivo de creación 100.000, migración `0011`, frontera de error saneada y pruebas contra `wrangler dev` real), pero **no se aplicó al remoto**: no se ejecutó `wrangler d1 migrations apply` sobre la D1 beta, no se desplegó el Worker y no se reintentó el smoke. El orden previsto para ese bloque es bookmark, `0011`, verificación de esquema, `beta:build`, deploy, verificación y smoke. `0011` es compatible con el Worker desplegado porque el flujo de autenticación actual falla antes de escribir; el orden inverso, en cambio, violaría el `CHECK` vigente (`>= 600000`).
 
@@ -335,12 +335,63 @@ No hubo deploy, ni seed, ni `secret put`, ni smoke, ni activaciones, ni login, n
 | Pruebas locales | `node --test tests/beta-infrastructure.test.mjs` → **20/20** aprobadas · `git diff --check` → sin hallazgos |
 | Migraciones y seeds | **ninguno**: `0011` ya estaba aplicada desde R1 y este bloque no las volvió a ejecutar |
 
-El deploy no activó cuentas, no inició sesión, no ejecutó `beta:smoke`, no aplicó migraciones ni seeds, no tocó `DOCUMENT_HMAC_KEY` y no escribió en D1. Con el Worker compatible ya desplegado, **B2.5 — recorrido de humo** es el único paso que falta antes de medir el `cpuTime` real de 100.000 iteraciones. **B2.5 todavía no fue ejecutado y A1 sigue abierto.**
+El deploy no activó cuentas, no inició sesión, no ejecutó `beta:smoke`, no aplicó migraciones ni seeds, no tocó `DOCUMENT_HMAC_KEY` y no escribió en D1. Con el Worker compatible ya desplegado, **B2.5 — recorrido de humo** quedó como único paso pendiente; se ejecutó más tarde el mismo día y quedó **verde**, incluida la medición del `cpuTime` real de 100.000 iteraciones (ver «Verificación de B2.5 (2026-09-23) — COMPLETADA»).
 
-## Pendientes de A1
+### Verificación de B2.5 (2026-09-23) — COMPLETADA
 
-1. **B2.5 — recorrido de humo (reintento pendiente)**: el primer intento falló por el tope de PBKDF2 (ver «Verificación de B2.5»). `0011` ya está aplicada en la D1 beta (ver «Verificación de R1»), así que, con el Worker compatible ya desplegado y verificado (ver «Verificación de R2»), el único paso que falta es reintentar el recorrido. El recorrido cubre activación ficticia, login, cookies, sesión, cursos, rechazo de la actividad deshabilitada, logout, 401 posterior, 401 de un usuario inexistente y `Origin` ajeno, más el verificador opcional `students:verify-api` apuntado a la beta. Para hacerlo repetible se pasa `BETA_DEMO_PASSWORD` con la contraseña ficticia custodiada fuera del repositorio: la primera corrida consume el código de activación demo y las siguientes inician sesión con esa contraseña. `ana.docente` no se usa ni se consume en este recorrido.
-2. Export y bookmark del estado verificado; registro del resultado en `docs/estado-actual-interno.md`.
+| Paso | Resultado |
+|---|---|
+| Gate humano | antes de ejecutar se mostró el comando exacto, se explicó el alcance (sólo `estudiante.demo`; consumo definitivo de su código de activación; creación de una credencial ficticia; creación y cierre de sesión; prueba de `Origin`; `ana.docente` intacta; sin deploy, sin migraciones y sin seeds) y se esperó **autorización explícita** |
+| Custodia de la contraseña ficticia | el responsable la preparó **fuera del agente** y la inyectó en el proceso del recorrido mediante un script **fuera del repositorio**; su valor nunca pasó por Cline, Git, esta documentación ni logs persistidos, y la salida del recorrido se revisó enmascarando cookie y token |
+| Comando ejecutado (**una sola vez**) | `npm run beta:smoke -- https://profemacon-net-2-beta.pablomacon.workers.dev`, contra la versión activa `07d2b360-ad43-4c3c-8304-9c4ccfca8b72` |
+| Resultado | **23/23 comprobaciones correctas** con exit **0** · ningún fallo y **ningún reintento** |
+| `GET /` | **200** `text/html` con el shell de la aplicación presente |
+| `GET /curso/programacion-i` | **200** `text/html` · **sin `Location`** (fallback SPA corregido) · shell presente |
+| Activación ficticia | `POST /api/auth/activate` → **200** en la primera corrida, con el código demo ficticio ya publicado en el `README.md` |
+| Cookie de sesión | `Set-Cookie` presente con `Path=/`, `HttpOnly`, `SameSite=Strict` y `Secure`; el valor nunca se registró en esta documentación |
+| `GET /api/session` | **200** autenticado y `user.username` = `estudiante.demo` |
+| `GET /api/me/courses` | **200** con una lista de **1** curso |
+| Actividad deshabilitada | `GET /api/me/activities/variables-java-01?groupCode=DEMO-A` → **404** `ACTIVITY_NOT_FOUND`, nunca `200` |
+| `POST /api/auth/logout` | **200** y cookie de limpieza `pm_session=; Path=/; HttpOnly; SameSite=Strict; Secure; Max-Age=0` |
+| `GET /api/session` posterior | **401** |
+| Login de usuario ficticio inexistente | **401**, **nunca 500** (la regresión de PBKDF2 quedó cerrada) y sin filtrado de detalles internos |
+| `Origin` ajeno | **403** |
+| Petición sin `Origin` | **403** |
+| D1 posterior (sólo `SELECT` / `PRAGMA`) | `credenciales_locales` = **1** —sólo `estudiante.demo`— con `algoritmo = pbkdf2-sha256`, `formato = v1`, `iteraciones = 100000`, `intentos_fallidos = 0` y sin bloqueo · activación de `estudiante.demo` **consumida** (2026-09-24 02:30:54 UTC) · activación de `ana.docente` **sin consumir** · `sesiones_usuario` = **1** fila, creada a las 02:30:54 y **revocada por el logout** (0 vigentes) · `eventos_auditoria` = **1** fila nueva (`cuenta_activada`, entidad `usuario`, `datos_json` vacío) · `d1_migrations` = 11 · `usuarios` = 2 · `grupos` = 1 · `intentos_actividad` = 0 · `respuestas_intento_actividad` = 0 · `calificaciones_actividad` = 0 · `pragma_foreign_key_check` = **0** |
+| `ana.docente` | **0 credenciales · 0 sesiones · activación sin consumir**: no se tocó |
+| Deploy · migraciones · seeds · `secret put` | **ninguno** · **ninguna** · **ninguno** · **ninguno** |
+| Datos reales | **ninguno**: sólo los fixtures ficticios ya versionados |
+| Verificador opcional `students:verify-api` | no se ejecutó en este bloque |
+| Pruebas locales | `node --test tests/beta-infrastructure.test.mjs` → **20/20** aprobadas · `git diff --check` → sin hallazgos |
+| Lecturas remotas | todas informaron `rows_written: 0` y `changed_db: false` |
+
+#### CPU y plan de Workers (medición real con PBKDF2 a 100.000)
+
+Durante el recorrido se siguió el Worker con `wrangler tail --env beta --format json` (sólo lectura, en paralelo a la corrida). Los 10 eventos capturados salieron con `outcome: ok` y `exceptions: []`, **sin ningún error 1102** y sin `Pbkdf2 failed`; Cloudflare redacta por sí mismo el encabezado `cookie` del volcado:
+
+| Endpoint | Status | wallTime | cpuTime |
+|---|---|---|---|
+| `POST /api/auth/activate` | 200 | 527 ms | **28 ms** |
+| `POST /api/auth/login` (ruta PBKDF2, usuario inexistente) | 401 | 141 ms | **22 ms** |
+| `GET /api/session` | 200 | 366 ms | 4 ms |
+| `GET /api/me/courses` | 200 | 356 ms | 2 ms |
+| `GET /api/me/activities/variables-java-01` | 404 | 481 ms | 2 ms |
+| `POST /api/auth/logout` | 200 | 159 ms | 1 ms |
+| `GET /api/session` (posterior al logout) | 401 | 139 ms | 0 ms |
+| `POST /api/auth/login` (`Origin` ajeno) | 403 | 0 ms | 0 ms |
+| `POST /api/auth/login` (sin `Origin`) | 403 | 0 ms | 0 ms |
+| `GET /curso/programacion-i` | 200 | 9 ms | 1 ms |
+
+**Conclusión registrada:** PBKDF2 a 100.000 iteraciones **funciona en producción sin ningún límite de CPU**: el costo medido de la derivación es de **28 ms** al crear la credencial y **22 ms** al verificarla, el recorrido completo terminó con `outcome: ok` y no apareció `1102` ni `Pbkdf2 failed`. **El plan vigente de la cuenta alcanza para este recorrido y no corresponde contratar un plan pago por estimación.** Salvedad explícita: la cifra histórica de referencia de 10 ms de CPU por request para el plan Free no coincide con el `cpuTime` medido —`cpuTime` no es `wallTime`—, el nivel del plan de la cuenta debe confirmarse en el panel de Cloudflare antes de dimensionar carga real, y esta medición es una muestra de un flujo ficticio de una sola corrida: no es una prueba de carga ni una autorización para tráfico real.
+
+
+## Pendientes tras A1
+
+**Estado: A1 — infraestructura remota ficticia COMPLETADA.** Los bloques B1, B2.1, B2.2, B2.3a, B2.3b, B2.4, R1, R2 y B2.5 quedaron cerrados y verificados sobre recursos remotos ficticios, sin ningún dato real en ningún momento. **A1 no autoriza datos personales reales**: la beta sigue conteniendo sólo fixtures ficticios y su URL sigue sin publicitarse. **Siguiente fase: A2 — seguridad operacional**, que no se inicia automáticamente.
+
+
+1. **B2.5 — recorrido de humo: COMPLETADO (2026-09-23 · 23/23 · exit 0)**. Registro histórico del pendiente: el primer intento falló por el tope de PBKDF2 (ver «Verificación de B2.5»). `0011` ya está aplicada en la D1 beta (ver «Verificación de R1»), así que, con el Worker compatible ya desplegado y verificado (ver «Verificación de R2»), el único paso que falta es reintentar el recorrido. El recorrido cubre activación ficticia, login, cookies, sesión, cursos, rechazo de la actividad deshabilitada, logout, 401 posterior, 401 de un usuario inexistente y `Origin` ajeno, más el verificador opcional `students:verify-api` apuntado a la beta. Para hacerlo repetible se pasa `BETA_DEMO_PASSWORD` con la contraseña ficticia custodiada fuera del repositorio: la primera corrida consume el código de activación demo y las siguientes inician sesión con esa contraseña. `ana.docente` no se usa ni se consume en este recorrido.
+2. Export y bookmark del estado verificado. El registro del resultado ya se hizo en `docs/estado-actual-interno.md` §14 (B2.5 completado y A1 cerrada).
 3. Cierre: decidir si la beta se destruye al terminar A1.
 4. Todo lo de A2 (rate limiting, restablecimiento de contraseña, revocación global de sesiones, limpieza de sesiones y activaciones, auditoría consultable, privacidad, pruebas negativas de authz y revisión de errores) sigue bloqueando el uso con datos reales.
 
