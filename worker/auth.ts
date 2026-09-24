@@ -28,6 +28,9 @@ export async function authenticateRequest(request: Request, db: D1Database): Pro
   if (!token || token.length < 32 || token.length > 256) return null;
 
   const tokenHash = await sha256Hex(token);
+  // Validación única de sesión de todo el Worker. Además de los controles que ya
+  // existían, exige que la versión de autenticación de la sesión sea EXACTAMENTE la
+  // vigente del usuario: cualquier diferencia (sesión más vieja o más nueva) es 401.
   const row = await db.prepare(`
     SELECT
       s.id AS sessionId,
@@ -41,15 +44,19 @@ export async function authenticateRequest(request: Request, db: D1Database): Pro
       AND s.revocada_en IS NULL
       AND s.expira_en > CURRENT_TIMESTAMP
       AND COALESCE(s.ultimo_uso_en, s.creada_en) > datetime('now', '-30 minutes')
+      AND s.auth_version = u.auth_version
       AND u.estado = 'activo'
     LIMIT 1
   `).bind(tokenHash).first<AuthenticatedUser & { sessionId: string }>();
 
   if (!row) return null;
+  // La última marca de uso no revive una sesión que dejó de ser válida entre la lectura
+  // y esta escritura: si una revocación (individual o global) la alcanzó en el medio,
+  // `revocada_en` ya no es NULL y no se refresca.
   await db.prepare(`
     UPDATE sesiones_usuario
     SET ultimo_uso_en = CURRENT_TIMESTAMP
-    WHERE id = ?1 AND ultimo_uso_en < datetime('now', '-5 minutes')
+    WHERE id = ?1 AND revocada_en IS NULL AND ultimo_uso_en < datetime('now', '-5 minutes')
   `).bind(row.sessionId).run();
   const { sessionId: _sessionId, ...user } = row;
   return user;

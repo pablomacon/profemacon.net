@@ -48,11 +48,16 @@ La verificación usa siempre el costo persistido en la fila, nunca el objetivo v
 - Vencimiento por inactividad a los 30 minutos.
 - Cierre explícito con revocación inmediata en D1.
 - Validación del encabezado `Origin` en operaciones de autenticación que modifican estado.
+- Versión de autenticación por cuenta: cada usuario tiene una `auth_version` vigente (`usuarios.auth_version`, entero que nace en `1`) y cada sesión conserva una **copia inmutable** de la versión que regía cuando se creó (`sesiones_usuario.auth_version`).
+- Una sesión sólo es válida si su versión es **igual** a la vigente. La creación copia la versión en la misma sentencia `INSERT … SELECT` —sin leerla antes en TypeScript— y el disparador de `0012` rechaza cualquier sesión que nazca con una versión distinta.
+- Revocación global (`worker/session-revocation.ts`): incrementa la versión de la cuenta y revoca explícitamente sus sesiones vigentes dentro de un único `db.batch()` atómico, y audita `sessions_revoked` con metadata mínima (motivo y actor; nunca token, cookie, contraseña, hash ni IP). El incremento **no** lleva condición de techo: si una cuenta llegara al máximo del `CHECK`, el batch completo se aborta y no queda ni una sesión revocada ni un evento a medias.
+- El logout individual revoca sólo esa sesión y **no** cambia la versión; no se registra como `sessions_revoked`.
+- La revocación global es todavía una **primitiva interna**: no existe endpoint público ni administrativo que la invoque. La usarán el cambio y el restablecimiento de contraseña.
 
 ## Pendiente antes de usar datos reales
 
 - Definir custodia y rotación del secreto HMAC.
-- Implementar restablecimiento de contraseña por docente o administrador.
+- Implementar restablecimiento de contraseña por docente o administrador (la primitiva de revocación global ya existe y es la que debe invocarse después de cambiar o restablecer una contraseña).
 - Revisar los plazos de sesión con la dinámica real del aula.
 - Añadir limitación de frecuencia por origen además del bloqueo por cuenta.
 - Preparar aviso de privacidad, política de conservación y procedimiento de rectificación.

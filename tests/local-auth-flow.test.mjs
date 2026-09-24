@@ -22,8 +22,9 @@ const DATABASE_NAME = "profemacon-beta-local";
 const ACTIVATION_CODE = "PM-PRUEBA-ACTIVACION-2026";
 const PASSWORD = "Frase ficticia de prueba suficientemente larga";
 const OTHER_PASSWORD = "Otra frase ficticia completamente distinta";
-const TOTAL_MIGRATIONS = 11;
+const TOTAL_MIGRATIONS = 12;
 const BASELINE_MIGRATIONS = 10;
+const MIGRATIONS_WITH_0011 = 11;
 
 function findSqliteFile(directory) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -316,9 +317,12 @@ test("el flujo real de activación, login, sesión y logout funciona en workerd"
   const activationRow = database.prepare("SELECT consumida_en FROM activaciones_cuenta WHERE usuario_id = 1").get();
   assert.ok(activationRow.consumida_en, "La activación debía consumirse");
 
-  const sessions = database.prepare("SELECT revocada_en FROM sesiones_usuario WHERE usuario_id = 1").all();
+  const sessions = database.prepare("SELECT revocada_en, auth_version FROM sesiones_usuario WHERE usuario_id = 1").all();
   assert.equal(sessions.length, 2, "Una sesión por activación y otra por login");
   assert.equal(sessions.filter((row) => row.revocada_en === null).length, 1, "El logout revoca sólo la sesión cerrada");
+  // 0012: la sesión copia la versión vigente del usuario en la misma sentencia.
+  assert.deepEqual(sessions.map((row) => row.auth_version), [1, 1], "Ambas sesiones deben nacer en la versión vigente");
+  assert.equal(database.prepare("SELECT auth_version FROM usuarios WHERE id = 1").get().auth_version, 1);
 
   const counts = database.prepare(`
     SELECT (SELECT COUNT(*) FROM usuarios) AS usuarios,
@@ -454,7 +458,7 @@ test("0011 falla ruidosamente con una credencial antigua de 600000 y permite rec
   }
 });
 
-test("0011 aplica sobre una D1 limpia, restringe el rango y no altera el inventario", () => {
+test("0011 restringe el rango sin alterar el inventario y 0012 versiona en un segundo paso", () => {
   const persistenceRoot = mkdtempSync(join(tmpdir(), "profemacon-auth-schema-"));
   try {
     const baselineDir = copyMigrations(join(persistenceRoot, "migrations-base"), BASELINE_MIGRATIONS);
@@ -467,7 +471,8 @@ test("0011 aplica sobre una D1 limpia, restringe el rango y no altera el inventa
     assert.match(before.prepare("SELECT sql FROM sqlite_master WHERE name = 'credenciales_locales'").get().sql, /iteraciones >= 600000/);
     before.close();
 
-    applyMigrations(persistenceRoot, writeWorkerConfig(persistenceRoot, repoMigrations, "actual"));
+    const upTo0011Dir = copyMigrations(join(persistenceRoot, "migrations-0011"), MIGRATIONS_WITH_0011);
+    applyMigrations(persistenceRoot, writeWorkerConfig(persistenceRoot, upTo0011Dir, "hasta-0011"));
 
     const after = openDatabase(databasePath);
     assert.deepEqual(schemaNames(after), inventory, "0011 no cambia el inventario de tablas, índices y disparadores");
@@ -480,7 +485,7 @@ test("0011 aplica sobre una D1 limpia, restringe el rango y no altera el inventa
       ["usuario_id", "algoritmo", "formato", "iteraciones", "sal_base64", "hash_base64",
         "intentos_fallidos", "bloqueada_hasta", "establecida_en", "actualizada_en"],
     );
-    assert.equal(after.prepare("SELECT COUNT(*) AS total FROM d1_migrations").get().total, TOTAL_MIGRATIONS);
+    assert.equal(after.prepare("SELECT COUNT(*) AS total FROM d1_migrations").get().total, MIGRATIONS_WITH_0011);
     assert.equal(after.prepare("PRAGMA foreign_key_check").all().length, 0);
 
     after.exec(`
@@ -515,6 +520,27 @@ test("0011 aplica sobre una D1 limpia, restringe el rango y no altera el inventa
       [50000, 75000, 100000, 100000],
     );
     after.close();
+
+    // 0012 sobre el mismo estado: sólo agrega las columnas de versión y dos disparadores.
+    applyMigrations(persistenceRoot, writeWorkerConfig(persistenceRoot, repoMigrations, "actual"));
+
+    const versioned = openDatabase(databasePath);
+    assert.equal(versioned.prepare("SELECT COUNT(*) AS total FROM d1_migrations").get().total, TOTAL_MIGRATIONS);
+    const versionedNames = schemaNames(versioned);
+    assert.deepEqual(
+      versionedNames.filter((entry) => !inventory.includes(entry)),
+      ["trigger:trg_sesion_auth_version_coherente_insert", "trigger:trg_sesion_auth_version_inmutable_update"],
+      "0012 sólo agrega sus dos disparadores",
+    );
+    assert.deepEqual(inventory.filter((entry) => !versionedNames.includes(entry)), []);
+    assert.equal(versioned.prepare("SELECT COUNT(*) AS total FROM usuarios WHERE auth_version = 1").get().total, 5);
+    assert.deepEqual(
+      versioned.prepare("SELECT iteraciones FROM credenciales_locales ORDER BY usuario_id").all().map((row) => row.iteraciones),
+      [50000, 75000, 100000, 100000],
+      "0012 no toca las credenciales existentes",
+    );
+    assert.equal(versioned.prepare("PRAGMA foreign_key_check").all().length, 0);
+    versioned.close();
   } finally {
     rmSync(persistenceRoot, { recursive: true, force: true });
   }

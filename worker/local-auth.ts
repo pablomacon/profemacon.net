@@ -149,15 +149,30 @@ export async function loginLocalAccount(db: D1Database, body: Record<string, unk
   return createLocalSession(db, row.userId);
 }
 
+/**
+ * Crea una sesión copiando la versión de autenticación vigente del usuario en la MISMA
+ * sentencia (`INSERT ... SELECT`).
+ *
+ * No hay lectura previa a TypeScript ni una ventana entre leer la versión y escribir la
+ * sesión: si la cuenta no existe, está inactiva o su versión cambió, la sentencia inserta
+ * cero filas y no se devuelve ningún token. El token sólo sale de aquí hacia el llamador
+ * que construye la cookie.
+ *
+ * Devuelve `null` cuando no se creó la sesión. Las rutas de autenticación lo traducen a
+ * `401` sin cookie, igual que un fallo de credenciales.
+ */
 async function createLocalSession(db: D1Database, userId: number) {
   const token = randomToken();
   const tokenHash = await sha256Hex(token);
   const sessionId = crypto.randomUUID();
-  await db.prepare(`
-    INSERT INTO sesiones_usuario (id, usuario_id, token_hash, expira_en, ultimo_uso_en)
-    VALUES (?1, ?2, ?3, datetime('now', '+${SESSION_HOURS} hours'), CURRENT_TIMESTAMP)
-  `).bind(sessionId, userId, tokenHash).run();
-  return { token };
+  const inserted = await db.prepare(`
+    INSERT INTO sesiones_usuario (id, usuario_id, token_hash, auth_version, expira_en, ultimo_uso_en)
+    SELECT ?1, u.id, ?2, u.auth_version, datetime('now', '+${SESSION_HOURS} hours'), CURRENT_TIMESTAMP
+    FROM usuarios u
+    WHERE u.id = ?3
+      AND u.estado = 'activo'
+  `).bind(sessionId, tokenHash, userId).run();
+  return inserted.meta.changes === 1 ? { token } : null;
 }
 
 export async function revokeLocalSession(request: Request, db: D1Database) {
