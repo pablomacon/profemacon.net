@@ -1,6 +1,6 @@
 # Beta remota ficticia (A1)
 
-Estado: **B1 completado**, **B2.1 completado** (D1 remota creada), **B2.2 completado** (`DOCUMENT_HMAC_KEY` cargado y verificado por nombre), **B2.3a completado** (migraciones `0001`–`0010`), **B2.3b completado** (fixtures ficticios), **B2.4 completado** (Worker beta desplegado y disponible por HTTPS), **R1 completado** (migración `0011` aplicada en la D1 beta) y **R2 completado** (Worker con PBKDF2 compatible desplegado y verificado por HTTPS). **B2.5 completado** (recorrido de humo ficticio 23/23 sobre el Worker desplegado, con medición de `cpuTime`) y **A1 — infraestructura remota ficticia completada**. Sin datos reales: **A1 no autoriza datos personales reales**. **A2.1a-R1 (2026-09-24): la migración `0012` NO se aplicó en la D1 beta** —bloqueada por un defecto de la herramienta con finales de línea CRLF y disparadores (`workers-sdk` #14991)—; el remoto quedó **intacto** y el arreglo (`.gitattributes` + LF) está preparado en local (ver «A2.1a-R1 — Intento de aplicar `0012`…»).
+Estado: **B1 completado**, **B2.1 completado** (D1 remota creada), **B2.2 completado** (`DOCUMENT_HMAC_KEY` cargado y verificado por nombre), **B2.3a completado** (migraciones `0001`–`0010`), **B2.3b completado** (fixtures ficticios), **B2.4 completado** (Worker beta desplegado y disponible por HTTPS), **R1 completado** (migración `0011` aplicada en la D1 beta) y **R2 completado** (Worker con PBKDF2 compatible desplegado y verificado por HTTPS). **B2.5 completado** (recorrido de humo ficticio 23/23 sobre el Worker desplegado, con medición de `cpuTime`) y **A1 — infraestructura remota ficticia completada**. Sin datos reales: **A1 no autoriza datos personales reales**. **A2.1a-R1 (2026-09-24): la migración `0012` NO se aplicó en la D1 beta** —bloqueada por un defecto de la herramienta con finales de línea CRLF y disparadores (`workers-sdk` #14991)—; el remoto quedó **intacto** y el arreglo (`.gitattributes` + LF) está preparado en local (ver «A2.1a-R1 — Intento de aplicar `0012`…»). Tras normalizarlo a LF, el reintento **A2.1a-R1-bis** sí aplicó `0012` (2026-09-24): `d1_migrations` = **12**, `auth_version` presente en `usuarios` y `sesiones_usuario` con todos los valores en **1**, y **35** disparadores (ver «A2.1a-R1-bis — Reintento único de `0012`…»). El deploy del Worker versionado sigue pendiente.
 Última actualización: 24 de septiembre de 2026.
 
 ## A. Propósito
@@ -89,7 +89,7 @@ Según la documentación de Cloudflare, una migración que falla se revierte, mi
 
 No se escribe SQL de reversión a mano: las migraciones no son reversibles.
 
-> **Regla de finales de línea (2026-09-24).** Los archivos de `migrations/` deben llegar a Wrangler **en LF**. La ruta remota lee el archivo del árbol de trabajo, y `wrangler d1 migrations apply --remote` falla con `incomplete input: SQLITE_ERROR [code: 7500]` cuando ese archivo tiene **CRLF** y contiene un **disparador** (`BEGIN … END;`): `workers-sdk` #14991, refinado por #15314. En Windows, `core.autocrlf = true` reescribe estos archivos con CRLF en cada checkout, así que el repositorio fija `migrations/*.sql text eol=lf` en `.gitattributes` y `tests/beta-infrastructure.test.mjs` lo verifica. Antes de cualquier aplicación remota, `git ls-files --eol migrations` debe mostrar `w/lf` en todas. La aplicación local (`--local`) no se ve afectada, porque SQLite parsea el archivo completo. El primer intento remoto de `0012` quedó bloqueado por esto (ver «A2.1a-R1 — Intento de aplicar `0012`…»).
+> **Regla de finales de línea (2026-09-24).** Los archivos de `migrations/` deben llegar a Wrangler **en LF**. La ruta remota lee el archivo del árbol de trabajo, y `wrangler d1 migrations apply --remote` falla con `incomplete input: SQLITE_ERROR [code: 7500]` cuando ese archivo tiene **CRLF** y contiene un **disparador** (`BEGIN … END;`): `workers-sdk` #14991, refinado por #15314. En Windows, `core.autocrlf = true` reescribe estos archivos con CRLF en cada checkout, así que el repositorio fija `migrations/*.sql text eol=lf` en `.gitattributes` y `tests/beta-infrastructure.test.mjs` lo verifica. Antes de cualquier aplicación remota, `git ls-files --eol migrations` debe mostrar `w/lf` en todas. La aplicación local (`--local`) no se ve afectada, porque SQLite parsea el archivo completo. El primer intento remoto de `0012` quedó bloqueado por esto (ver «A2.1a-R1 — Intento de aplicar `0012`…»). Con el árbol ya en LF, el reintento único de `A2.1a-R1-bis` aplicó `0012` sin errores: la regla quedó validada de punta a punta en el remoto.
 
 ## J. Datos ficticios
 
@@ -407,7 +407,34 @@ Registro del primer bloque remoto de A2.1a. Se ejecutó con autorización humana
 | Arreglo preparado (sólo local) | `.gitattributes` con `migrations/*.sql text eol=lf` · árbol de trabajo de `0011` y `0012` normalizado a LF (contenido idéntico al comprometido, verificado por SHA-256) · guarda nueva en `tests/beta-infrastructure.test.mjs` |
 | No se ejecutó | deploy del Worker · seeds · `secret put` · `revokeAllSessions` · ningún `auth_version > 1` · ningún smoke, login, activación o logout |
 
-**Estado transitorio.** El remoto sigue en el **esquema `0011`** con el Worker desplegado en R2/B2.5 y **no recibió ninguna escritura** en este bloque. `A2.1a-R1` queda **abierto**: el reintento (una sola escritura, ya con el árbol en LF) requiere autorización humana explícita, y `A2.1a-R2` —deploy del Worker versionado— sigue pendiente detrás de él.
+**Estado transitorio.** El remoto siguió en el **esquema `0011`** con el Worker desplegado en R2/B2.5: hubo **un intento remoto fallido que fue revertido atómicamente y no dejó cambios persistentes** —la migración no se registró y no quedó ningún objeto de esquema ni fila modificada—. `A2.1a-R1` quedó **abierto** y se cerró con el reintento «A2.1a-R1-bis», ya con el árbol en LF.
+
+## A2.1a-R1-bis — Reintento único de `0012` (2026-09-24): APLICADA
+
+Segundo intento remoto de A2.1a, ejecutado con autorización humana explícita y **una sola** escritura. El primer intento (`A2.1a-R1`) falló por CRLF + disparadores y fue revertido atómicamente sin efectos persistentes; este reintento usó el archivo ya normalizado a LF y sí persistió.
+
+| Paso | Resultado |
+|---|---|
+| Preflight | `git status --porcelain -uall` **vacío** · `HEAD` = `origin/main` = `148a480` · `git rev-list --left-right --count HEAD...origin/main` = `0 0` · `verify-beta-d1-target.mjs --require-real` → exit **0** |
+| EOL verificado | `git ls-files --eol migrations` → **`w/lf` en las 12**, sin BOM · `0011` y `0012` con contenido **idéntico** al blob comprometido (SHA-256) · `tests/beta-infrastructure.test.mjs` **21/21** |
+| Estado previo (sólo `SELECT`/`PRAGMA`) | `d1_migrations` = **11** · `0012` ausente · sin `auth_version` · 2 usuarios · 1 credencial local · 1 sesión · 1 grupo · activaciones (estudiante consumida, docente sin consumir) · 33 disparadores · `pragma_foreign_key_check` = **0** · 118 objetos (29 tablas, 56 índices, 33 disparadores) |
+| Bookmark pre-reintento | `00000016-00000000-000050f0-b4d8b8c444266e18df4222b9f7f7c027` (registrado; **no** se ejecutó `restore`) |
+| Gate humano | se mostró el comando exacto, la D1 destino, el `database_id`, `d1_migrations` = 11, el bookmark pre-reintento y el nombre exacto de `0012`, y se esperó **autorización explícita** |
+| Comando ejecutado (**una sola** escritura autorizada) | `wrangler d1 migrations apply profemacon-beta-remote --remote --env beta` (binario local, Wrangler 4.112.0). Anunció **una sola** migración pendiente: `0012_auth_version_sesiones.sql` |
+| Resultado | `Executed 6 commands in 2.89ms` · estado **✅** · exit **0** |
+| `d1_migrations` posterior | **12** filas, última `0012_auth_version_sesiones.sql` |
+| Esquema `usuarios` | `auth_version` (cid 9) **INTEGER NOT NULL DEFAULT 1**; la tabla almacenada conserva `CHECK (auth_version BETWEEN 1 AND 2147483647)`; las 9 columnas previas intactas |
+| Esquema `sesiones_usuario` | `auth_version` (cid 9) **INTEGER NOT NULL DEFAULT 1**; las 9 columnas previas intactas |
+| Disparadores | **35**, con `trg_sesion_auth_version_coherente_insert` y `trg_sesion_auth_version_inmutable_update` y sus cuerpos exactos |
+| Valores `auth_version` | `ana.docente = 1` · `estudiante.demo = 1` · la única sesión histórica (`usuario_id = 2`) en **1** · **0** usuarios y **0** sesiones fuera de 1 |
+| Datos | 2 usuarios · 1 credencial local · 1 sesión · 1 grupo (**sin cambios**) · activaciones sin cambios (estudiante consumida, docente sin consumir) · `pragma_foreign_key_check` = **0** |
+| Inventario | **120 objetos** (29 tablas, **56 índices idénticos**, **35 disparadores**) · diff contra el baseline **exactamente +2 disparadores** · sin tablas ni índices nuevos ni tablas auxiliares |
+| Lecturas de verificación | todas con `rows_written: 0` y `changed_db: false` |
+| No se ejecutó | deploy del Worker · seeds · `secret put` · `revokeAllSessions` · ningún cambio manual de `auth_version` · ningún login, activación, logout ni smoke |
+
+**Estado transitorio vigente: esquema `0012` + Worker viejo.** La convivencia es compatible **mientras** todos los usuarios y todas las sesiones sigan en `auth_version = 1`: el Worker desplegado (R2/B2.5) no conoce la columna, pero ninguna versión cambió, así que su validación de sesión sigue siendo correcta. Todavía **no** hubo revocación global ni incremento real de versión, por lo que el **rollback al Worker actual sigue siendo posible**; deja de serlo en cuanto ocurra la primera revocación global real. No se probó la revocación.
+
+**Pendiente.** `A2.1a-R2` —deploy del Worker versionado— requiere autorización humana explícita; recién después corresponden el smoke compatible y la prueba de revocación.
 
 ## Pendientes tras A1
 
@@ -418,6 +445,6 @@ Registro del primer bloque remoto de A2.1a. Se ejecutó con autorización humana
 2. Export y bookmark del estado verificado. El registro del resultado ya se hizo en `docs/estado-actual-interno.md` §14 (B2.5 completado y A1 cerrada).
 3. Cierre: decidir si la beta se destruye al terminar A1.
 4. Todo lo de A2 (rate limiting, restablecimiento de contraseña, revocación global de sesiones, limpieza de sesiones y activaciones, auditoría consultable, privacidad, pruebas negativas de authz y revisión de errores) sigue bloqueando el uso con datos reales.
-5. **A2.1a-R1 — reintento de `0012`: PENDIENTE (bloqueado por finales de línea).** El primer intento remoto (2026-09-24) **no aplicó nada** por el defecto de `d1 migrations apply --remote` con CRLF + disparadores (workers-sdk #14991). El arreglo local ya está preparado —`.gitattributes` con `migrations/*.sql text eol=lf`, árbol de trabajo en LF y guarda en `tests/beta-infrastructure.test.mjs`—, pero el reintento (una sola escritura) no se ejecuta sin autorización humana explícita. `A2.1a-R2` (deploy del Worker versionado) depende de que `0012` esté aplicada.
+5. **A2.1a-R1-bis — `0012` aplicada en la D1 beta: COMPLETADA (2026-09-24).** El primer intento remoto de `0012` (`A2.1a-R1`) falló por el defecto de `d1 migrations apply --remote` con CRLF + disparadores (`workers-sdk` #14991) y fue revertido atómicamente, sin cambios persistentes. Tras normalizar a LF —`.gitattributes` con `migrations/*.sql text eol=lf`, árbol de trabajo en LF y guarda en `tests/beta-infrastructure.test.mjs`—, el reintento único aplicó `0012` con autorización humana previa: `d1_migrations` = **12**, `auth_version` en `usuarios` y `sesiones_usuario` con todos los valores en **1**, **35** disparadores y conteos sin cambios (ver «A2.1a-R1-bis — Reintento único de `0012`…»). Queda pendiente **`A2.1a-R2`** (deploy del Worker versionado), que requiere autorización humana explícita.
 
 
